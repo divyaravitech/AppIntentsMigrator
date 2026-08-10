@@ -1,0 +1,89 @@
+import Foundation
+
+/// The kind of legacy SiriKit construct a `DetectedPattern` refers to.
+///
+/// Raw values are the names used in the JSON report.
+enum PatternType: String, Codable, CaseIterable, Sendable {
+    /// A declaration or reference involving `INExtension`, the SiriKit extension entry point.
+    case inExtension = "INExtension"
+    /// An `INIntent` subclass, an `IN…IntentHandling` conformance, or an intent type reference.
+    case inIntent = "INIntent"
+    /// A legacy delegate/handler entry point (`handler(for:)`, `handle(intent:)`,
+    /// `application(_:didFinishLaunchingWithOptions:)`, …).
+    case delegateMethod = "DelegateMethod"
+    /// Any other Intents / IntentsUI framework usage.
+    case otherSiriKit = "OtherSiriKit"
+
+    /// Label used in the console summary.
+    var displayLabel: String {
+        switch self {
+        case .inExtension: return "INExtension subclasses"
+        case .inIntent: return "INIntent subclasses"
+        case .delegateMethod: return "Delegate methods"
+        case .otherSiriKit: return "Other SiriKit patterns"
+        }
+    }
+}
+
+/// A single SiriKit pattern found at a specific line of a specific file.
+struct DetectedPattern: Codable, Equatable, Sendable {
+    /// The category this finding falls into.
+    let patternType: PatternType
+    /// Path of the file, relative to the scan root when the scan root is a directory.
+    let file: String
+    /// 1-based line number.
+    let line: Int
+    /// The source line, whitespace-trimmed.
+    let code: String
+    /// The exact substring that triggered the match.
+    let match: String
+    /// Human-readable name of the rule that produced this finding.
+    let rule: String
+}
+
+/// A file the scanner could not read, and why.
+struct SkippedFile: Codable, Equatable, Sendable {
+    let file: String
+    let reason: String
+}
+
+/// The outcome of scanning a file or directory tree.
+struct ScanResult: Codable, Equatable, Sendable {
+    /// The path that was scanned, as resolved by the scanner.
+    let root: String
+    /// Every pattern found, ordered by file and then by line.
+    let patterns: [DetectedPattern]
+    /// Total number of patterns found.
+    let totalCount: Int
+    /// Number of distinct files containing at least one pattern.
+    let filesAffected: Int
+    /// Number of Swift files successfully read during the scan.
+    let filesScanned: Int
+    /// Files that were found but could not be read (permissions, I/O errors).
+    let skippedFiles: [SkippedFile]
+
+    init(root: String, patterns: [DetectedPattern], filesScanned: Int, skippedFiles: [SkippedFile] = []) {
+        self.root = root
+        self.patterns = patterns
+        self.totalCount = patterns.count
+        self.filesAffected = Set(patterns.map(\.file)).count
+        self.filesScanned = filesScanned
+        self.skippedFiles = skippedFiles
+    }
+
+    /// Counts per pattern type, including types with no findings.
+    var countsByType: [PatternType: Int] {
+        var counts = Dictionary(uniqueKeysWithValues: PatternType.allCases.map { ($0, 0) })
+        for pattern in patterns {
+            counts[pattern.patternType, default: 0] += 1
+        }
+        return counts
+    }
+
+    /// Findings grouped by file, ordered by file path.
+    var patternsByFile: [(file: String, patterns: [DetectedPattern])] {
+        Dictionary(grouping: patterns, by: \.file)
+            .sorted { $0.key < $1.key }
+            .map { (file: $0.key, patterns: $0.value.sorted { $0.line < $1.line }) }
+    }
+}
