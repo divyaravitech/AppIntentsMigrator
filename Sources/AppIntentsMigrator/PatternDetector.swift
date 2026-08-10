@@ -9,7 +9,7 @@ struct PatternDetector: Sendable {
     /// matching, but is not annotated `Sendable`, hence the unchecked conformance.
     struct Rule: @unchecked Sendable {
         let type: PatternType
-        let name: String
+        let id: RuleID
         let regex: NSRegularExpression
     }
 
@@ -18,45 +18,46 @@ struct PatternDetector: Sendable {
     /// (`class Handler: INExtension` is an INExtension finding, not a generic `IN…` reference).
     static let rules: [Rule] = [
         // MARK: INExtension
-        rule(.inExtension, "INExtension subclass", #"\bclass\s+\w+\s*:[^{]*\bINExtension\b"#),
+        rule(.inExtension, .inExtensionSubclass, #"\bclass\s+\w+\s*:[^{]*\bINExtension\b"#),
 
         // MARK: Legacy delegate / handler entry points
-        rule(.delegateMethod, "INExtension handler(for:)", #"\bfunc\s+handler\s*\(\s*for\s+\w+\s*:"#),
-        rule(.delegateMethod, "SiriKit handle(intent:)", #"\bfunc\s+handle\s*\(\s*\w+\s*:\s*IN\w+"#),
-        rule(.delegateMethod, "SiriKit confirm(intent:)", #"\bfunc\s+confirm\s*\(\s*\w+\s*:\s*IN\w+"#),
-        rule(.delegateMethod, "SiriKit resolve method", #"\bfunc\s+resolve\w*\s*\(\s*for\s+\w+\s*:\s*IN\w+"#),
-        rule(.delegateMethod, "UIApplication intent handler", #"\bhandlerFor\s*\w*\s*:"#),
+        rule(.delegateMethod, .handlerForIntent, #"\bfunc\s+handler\s*\(\s*for\s+\w+\s*:"#),
+        rule(.delegateMethod, .handleIntent, #"\bfunc\s+handle\s*\(\s*\w+\s*:\s*IN\w+"#),
+        rule(.delegateMethod, .confirmIntent, #"\bfunc\s+confirm\s*\(\s*\w+\s*:\s*IN\w+"#),
+        rule(.delegateMethod, .resolveMethod, #"\bfunc\s+resolve\w*\s*\(\s*for\s+\w+\s*:\s*IN\w+"#),
+        rule(.delegateMethod, .applicationHandlerFor, #"\bhandlerFor\s*\w*\s*:"#),
         rule(
             .delegateMethod,
-            "App launch delegate",
+            .appLaunchDelegate,
             #"\b(?:didFinishLaunchingWithOptions|willFinishLaunchingWithOptions|applicationDidFinishLaunching|applicationWillFinishLaunching)\b"#
         ),
-        rule(.delegateMethod, "NSUserActivity continuation", #"\bfunc\s+application\s*\([^)]*\bcontinue\s+userActivity\b"#),
+        rule(.delegateMethod, .userActivityContinuation, #"\bfunc\s+application\s*\([^)]*\bcontinue\s+userActivity\b"#),
 
         // MARK: Intents
-        rule(.inIntent, "Custom intent subclass", #"\bclass\s+\w+\s*:[^{]*\bIN\w*Intent\b"#),
-        rule(.inIntent, "Intent handling protocol", #"\bIN\w*IntentHandling\b"#),
-        rule(.inExtension, "INExtension reference", #"\bINExtension\b"#),
-        rule(.inIntent, "Intent type reference", #"\bIN\w*Intent(?:Response)?\b"#),
+        rule(.inIntent, .customIntentSubclass, #"\bclass\s+\w+\s*:[^{]*\bIN\w*Intent\b"#),
+        rule(.inIntent, .intentHandlingProtocol, #"\bIN\w*IntentHandling\b"#),
+        rule(.inIntent, .resolutionResult, #"\bIN\w*ResolutionResult\b"#),
+        rule(.inExtension, .inExtensionReference, #"\bINExtension\b"#),
+        rule(.inIntent, .intentTypeReference, #"\bIN\w*Intent(?:Response)?\b"#),
 
         // MARK: Everything else from Intents / IntentsUI
-        rule(.otherSiriKit, "Intents framework import", #"^\s*(?:@\w+\s+)*import\s+Intents(?:UI)?\b"#),
+        rule(.otherSiriKit, .intentsImport, #"^\s*(?:@\w+\s+)*import\s+Intents(?:UI)?\b"#),
+        rule(.otherSiriKit, .interactionDonation, #"\bINInteraction\b"#),
         rule(
             .otherSiriKit,
-            "Voice shortcut API",
-            #"\b(?:INVoiceShortcutCenter|INVoiceShortcut|INShortcut|INUIAddVoiceShortcut\w*|INInteraction)\b"#
+            .voiceShortcutAPI,
+            #"\b(?:INVoiceShortcutCenter|INVoiceShortcut|INShortcut|INUIAddVoiceShortcut\w*|INUIEditVoiceShortcut\w*)\b"#
         ),
+        rule(.otherSiriKit, .siriAuthorization, #"\b(?:INPreferences|INSiriAuthorizationStatus)\b"#),
+        rule(.otherSiriKit, .invocationPhrase, #"\bsuggestedInvocationPhrase\b"#),
+        rule(.otherSiriKit, .predictionEligibility, #"\bisEligibleFor(?:Prediction|Search|PublicIndexing|Handoff)\b"#),
+        rule(.otherSiriKit, .infoPlistIntents, #"\b(?:IntentsSupported|IntentsRestrictedWhileLocked|INIntentsSupported)\b"#),
         rule(
             .otherSiriKit,
-            "Siri authorization API",
-            #"\b(?:INPreferences|INSiriAuthorizationStatus)\b"#
+            .trackingAuthorization,
+            #"\b(?:ATTrackingManager|requestTrackingAuthorization|NSUserTrackingUsageDescription|AppTrackingTransparency)\b"#
         ),
-        rule(
-            .otherSiriKit,
-            "Donation / prediction API",
-            #"\b(?:suggestedInvocationPhrase|isEligibleForPrediction|IntentsSupported|IntentsRestrictedWhileLocked)\b"#
-        ),
-        rule(.otherSiriKit, "Intents framework type", #"\bIN[A-Z]\w+\b"#),
+        rule(.otherSiriKit, .intentsFrameworkType, #"\bIN[A-Z]\w+\b"#),
     ]
 
     /// Scans `source` and returns every pattern found, ordered by line number.
@@ -81,7 +82,7 @@ struct PatternDetector: Sendable {
                     line: index + 1,
                     code: line.trimmingCharacters(in: .whitespaces),
                     match: match,
-                    rule: rule.name
+                    rule: rule.id
                 )
             )
         }
@@ -149,8 +150,8 @@ struct PatternDetector: Sendable {
 
     /// Builds a rule from a literal pattern. The patterns are compile-time constants,
     /// so a failure here is a programming error rather than a runtime condition.
-    private static func rule(_ type: PatternType, _ name: String, _ pattern: String) -> Rule {
+    private static func rule(_ type: PatternType, _ id: RuleID, _ pattern: String) -> Rule {
         // swiftlint:disable:next force_try
-        Rule(type: type, name: name, regex: try! NSRegularExpression(pattern: pattern))
+        Rule(type: type, id: id, regex: try! NSRegularExpression(pattern: pattern))
     }
 }

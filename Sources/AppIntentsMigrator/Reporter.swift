@@ -61,20 +61,47 @@ enum Reporter {
     ///
     /// - Throws: `ReportError.cannotWriteReport` when the destination cannot be created or written.
     static func generateJSONReport(result: ScanResult, outputPath: String) throws {
-        let url = URL(fileURLWithPath: (outputPath as NSString).expandingTildeInPath)
+        try writeJSON(result, to: outputPath)
+    }
+
+    /// Writes the migration suggestions as pretty-printed JSON.
+    static func generateJSONReport(suggestions: [MigrationSuggestion], root: String, outputPath: String) throws {
+        try writeJSON(SuggestionReport(root: root, suggestions: suggestions), to: outputPath)
+    }
+
+    /// Writes an already-formatted text report (the console migration guide) to disk.
+    static func writeText(_ contents: String, outputPath: String) throws {
+        let url = fileURL(for: outputPath)
+        do {
+            try createParentDirectory(of: url)
+            try Data(contents.utf8).write(to: url, options: .atomic)
+        } catch {
+            throw ReportError.cannotWriteReport(path: url.path, underlying: error)
+        }
+    }
+
+    private static func writeJSON<Payload: Encodable>(_ payload: Payload, to outputPath: String) throws {
+        let url = fileURL(for: outputPath)
         do {
             let encoder = JSONEncoder()
             encoder.outputFormatting = [.prettyPrinted, .sortedKeys, .withoutEscapingSlashes]
-            let data = try encoder.encode(result)
+            let data = try encoder.encode(payload)
 
-            let directory = url.deletingLastPathComponent()
-            if !directory.path.isEmpty, !FileManager.default.fileExists(atPath: directory.path) {
-                try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
-            }
+            try createParentDirectory(of: url)
             try data.write(to: url, options: .atomic)
         } catch {
             throw ReportError.cannotWriteReport(path: url.path, underlying: error)
         }
+    }
+
+    private static func fileURL(for path: String) -> URL {
+        URL(fileURLWithPath: (path as NSString).expandingTildeInPath)
+    }
+
+    private static func createParentDirectory(of url: URL) throws {
+        let directory = url.deletingLastPathComponent()
+        guard !directory.path.isEmpty, !FileManager.default.fileExists(atPath: directory.path) else { return }
+        try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
     }
 }
 

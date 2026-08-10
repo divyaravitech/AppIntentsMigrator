@@ -25,6 +25,43 @@ enum PatternType: String, Codable, CaseIterable, Sendable {
     }
 }
 
+/// Identifies the specific detection rule that produced a finding.
+///
+/// Shared between `PatternDetector` (which owns the regexes) and `CommonPatterns`
+/// (which owns the migration advice), so every rule is guaranteed to have a
+/// migration mapped to it. Raw values are the human-readable rule names.
+enum RuleID: String, Codable, CaseIterable, Sendable {
+    // INExtension
+    case inExtensionSubclass = "INExtension subclass"
+    case inExtensionReference = "INExtension reference"
+
+    // Legacy delegate / handler entry points
+    case handlerForIntent = "INExtension handler(for:)"
+    case handleIntent = "SiriKit handle(intent:)"
+    case confirmIntent = "SiriKit confirm(intent:)"
+    case resolveMethod = "SiriKit resolve method"
+    case applicationHandlerFor = "UIApplication intent handler"
+    case appLaunchDelegate = "App launch delegate"
+    case userActivityContinuation = "NSUserActivity continuation"
+
+    // Intents
+    case customIntentSubclass = "Custom intent subclass"
+    case intentHandlingProtocol = "Intent handling protocol"
+    case resolutionResult = "Resolution result type"
+    case intentTypeReference = "Intent type reference"
+
+    // Everything else from Intents / IntentsUI
+    case intentsImport = "Intents framework import"
+    case interactionDonation = "INInteraction donation"
+    case voiceShortcutAPI = "Voice shortcut API"
+    case siriAuthorization = "Siri authorization API"
+    case invocationPhrase = "Shortcut phrase configuration"
+    case predictionEligibility = "Prediction eligibility"
+    case infoPlistIntents = "Info.plist intent declaration"
+    case trackingAuthorization = "Tracking authorization API"
+    case intentsFrameworkType = "Intents framework type"
+}
+
 /// A single SiriKit pattern found at a specific line of a specific file.
 struct DetectedPattern: Codable, Equatable, Sendable {
     /// The category this finding falls into.
@@ -37,8 +74,8 @@ struct DetectedPattern: Codable, Equatable, Sendable {
     let code: String
     /// The exact substring that triggered the match.
     let match: String
-    /// Human-readable name of the rule that produced this finding.
-    let rule: String
+    /// The rule that produced this finding.
+    let rule: RuleID
 }
 
 /// A file the scanner could not read, and why.
