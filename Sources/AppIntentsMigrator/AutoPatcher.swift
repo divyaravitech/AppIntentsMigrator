@@ -47,6 +47,19 @@ actor AutoPatcher {
     ///   - suggestions: Suggestions whose `pattern.line` refers to this file.
     func patchFile(_ file: String, using suggestions: [MigrationSuggestion]) async throws -> PatchResult {
         let url = URL(fileURLWithPath: file)
+
+        // The scanner also reports Info.plist declarations, but every patching rule is a
+        // Swift rewrite and the validator only understands Swift. Refuse anything else
+        // outright rather than relying on no rule happening to match.
+        guard url.pathExtension == "swift" else {
+            return PatchResult(
+                filesPatched: 0,
+                linesChanged: 0,
+                skipped: suggestions.map { "\($0.pattern.file):\($0.pattern.line) — edit by hand: not a Swift file" },
+                validated: true
+            )
+        }
+
         guard let original = try? String(contentsOf: url, encoding: .utf8) else {
             return PatchResult(
                 filesPatched: 0,

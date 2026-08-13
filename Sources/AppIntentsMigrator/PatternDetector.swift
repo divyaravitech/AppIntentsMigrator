@@ -90,8 +90,76 @@ struct PatternDetector: Sendable {
         return patterns
     }
 
+    // MARK: - Property lists
+
+    /// Rules for `Info.plist`, where SiriKit is declared rather than called.
+    ///
+    /// These reuse the `RuleID`s of the equivalent Swift patterns, so the same migration
+    /// advice applies and `CommonPatterns` needs no plist-specific entries. They exist
+    /// because the keys below only ever appear inside a string in Swift source, and the
+    /// detector deliberately ignores string contents.
+    static let propertyListRules: [Rule] = [
+        rule(.inExtension, .inExtensionReference, #"com\.apple\.intents(?:-ui)?-service"#),
+        rule(.otherSiriKit, .infoPlistIntents, #"\b(?:IntentsSupported|IntentsRestrictedWhileLocked)\b"#),
+        rule(.otherSiriKit, .siriAuthorization, #"\bNSSiriUsageDescription\b"#),
+        rule(.inIntent, .intentTypeReference, #"\bIN\w*Intent\b"#),
+    ]
+
+    /// Scans a property list for SiriKit declarations.
+    ///
+    /// XML comments are skipped; otherwise this is a plain line scan, since a plist has no
+    /// string literals to distinguish from code.
+    func detectInPropertyList(in source: String, file: String) -> [DetectedPattern] {
+        var patterns: [DetectedPattern] = []
+        var insideComment = false
+
+        for (index, rawLine) in source.split(separator: "\n", omittingEmptySubsequences: false).enumerated() {
+            let line = String(rawLine).trimmingCharacters(in: CharacterSet(charactersIn: "\r"))
+            let code = Self.strippingXMLComments(from: line, insideComment: &insideComment)
+            guard !code.trimmingCharacters(in: .whitespaces).isEmpty else { continue }
+
+            guard let (rule, match) = Self.firstMatch(in: code, rules: Self.propertyListRules) else { continue }
+            patterns.append(
+                DetectedPattern(
+                    patternType: rule.type,
+                    file: file,
+                    line: index + 1,
+                    code: line.trimmingCharacters(in: .whitespaces),
+                    match: match,
+                    rule: rule.id
+                )
+            )
+        }
+
+        return patterns
+    }
+
+    /// Removes `<!-- … -->` content, tracking comments that span lines.
+    private static func strippingXMLComments(from line: String, insideComment: inout Bool) -> String {
+        var remainder = Substring(line)
+        var result = ""
+
+        while !remainder.isEmpty {
+            if insideComment {
+                guard let end = remainder.range(of: "-->") else { return result }
+                remainder = remainder[end.upperBound...]
+                insideComment = false
+                continue
+            }
+            guard let start = remainder.range(of: "<!--") else {
+                result += remainder
+                break
+            }
+            result += remainder[..<start.lowerBound]
+            remainder = remainder[start.upperBound...]
+            insideComment = true
+        }
+
+        return result
+    }
+
     /// Returns the highest-priority rule matching `code`, along with the matched substring.
-    private static func firstMatch(in code: String) -> (Rule, String)? {
+    private static func firstMatch(in code: String, rules: [Rule] = rules) -> (Rule, String)? {
         let range = NSRange(code.startIndex..<code.endIndex, in: code)
         for rule in rules {
             guard let match = rule.regex.firstMatch(in: code, options: [], range: range),

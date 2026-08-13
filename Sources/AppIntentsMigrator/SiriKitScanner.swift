@@ -25,7 +25,15 @@ struct SiriKitScanner: Sendable {
         ".build", ".git", ".swiftpm", "DerivedData", "Pods", "Carthage", "node_modules",
     ]
 
+    /// Shell-style globs matched against each path relative to the scan root, and against
+    /// its last component. A matching file is skipped; a matching directory is not entered.
+    var excludedGlobs: [String] = []
+
     var detector = PatternDetector()
+
+    /// File extensions the scanner reads. Swift sources carry SiriKit calls; property lists
+    /// carry the declarations (`IntentsSupported`, the intents extension point, and so on).
+    private static let scannedExtensions: Set<String> = ["swift", "plist"]
 
     /// Scans `path`, which may be a directory tree or a single `.swift` file.
     ///
@@ -48,7 +56,7 @@ struct SiriKitScanner: Sendable {
         }
 
         let scanningDirectory = isDirectory.boolValue
-        let files = scanningDirectory ? try swiftFiles(in: root) : [root]
+        let files = scanningDirectory ? try scannableFiles(in: root) : [root]
 
         var patterns: [DetectedPattern] = []
         var skippedFiles: [SkippedFile] = []
@@ -59,7 +67,11 @@ struct SiriKitScanner: Sendable {
             do {
                 let source = try Self.readSource(at: file)
                 filesScanned += 1
-                patterns.append(contentsOf: detector.detect(in: source, file: relativePath))
+                if file.pathExtension == "plist" {
+                    patterns.append(contentsOf: detector.detectInPropertyList(in: source, file: relativePath))
+                } else {
+                    patterns.append(contentsOf: detector.detect(in: source, file: relativePath))
+                }
             } catch {
                 skippedFiles.append(SkippedFile(file: relativePath, reason: Self.describe(error)))
             }
@@ -73,10 +85,11 @@ struct SiriKitScanner: Sendable {
         )
     }
 
-    /// Every `.swift` file under `root`, excluding hidden and build directories.
+    /// Every scannable file under `root`, excluding hidden directories, build output, and
+    /// anything matching `excludedGlobs`.
     ///
     /// Directories that cannot be read are skipped rather than aborting the walk.
-    private func swiftFiles(in root: URL) throws -> [URL] {
+    private func scannableFiles(in root: URL) throws -> [URL] {
         guard
             let enumerator = FileManager.default.enumerator(
                 at: root,
@@ -91,19 +104,32 @@ struct SiriKitScanner: Sendable {
         var files: [URL] = []
         while let url = enumerator.nextObject() as? URL {
             let isDirectory = (try? url.resourceValues(forKeys: [.isDirectoryKey]))?.isDirectory ?? false
+            // Resolved the same way as the root so relative paths can be derived by prefix.
+            let resolved = url.resolvingSymlinksInPath()
+            let relativePath = Self.path(of: resolved, relativeTo: root)
+
             if isDirectory {
-                if excludedDirectories.contains(url.lastPathComponent) {
+                if excludedDirectories.contains(url.lastPathComponent) || isExcluded(relativePath) {
                     enumerator.skipDescendants()
                 }
                 continue
             }
-            if url.pathExtension == "swift" {
-                // Resolved the same way as the root so relative paths can be derived by prefix.
-                files.append(url.resolvingSymlinksInPath())
-            }
+            guard Self.scannedExtensions.contains(url.pathExtension), !isExcluded(relativePath) else { continue }
+            files.append(resolved)
         }
 
         return files.sorted { $0.path < $1.path }
+    }
+
+    /// True when `relativePath` matches any exclusion glob, either in full or by basename,
+    /// so both `Tests/*` and `*.generated.swift` behave the way callers expect.
+    func isExcluded(_ relativePath: String) -> Bool {
+        guard !excludedGlobs.isEmpty else { return false }
+        let basename = (relativePath as NSString).lastPathComponent
+
+        return excludedGlobs.contains { pattern in
+            fnmatch(pattern, relativePath, 0) == 0 || fnmatch(pattern, basename, 0) == 0
+        }
     }
 
     /// Reads a source file, falling back to Latin-1 so that a stray non-UTF-8 byte

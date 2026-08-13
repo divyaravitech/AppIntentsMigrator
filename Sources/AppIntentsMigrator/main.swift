@@ -25,8 +25,17 @@ struct Scan: ParsableCommand {
     @Flag(name: .customLong("no-json"), help: "Skip writing the JSON report.")
     var skipJSON: Bool = false
 
+    @Option(
+        name: .customLong("exclude"),
+        help: ArgumentHelp(
+            "Glob of paths to skip. Repeatable.",
+            discussion: "Matched against each path relative to the scan root and against its file name, e.g. --exclude 'Tests/*' --exclude '*.generated.swift'."
+        )
+    )
+    var excludedGlobs: [String] = []
+
     func run() throws {
-        let result = try SiriKitScanner().scan(path: path)
+        let result = try SiriKitScanner(excludedGlobs: excludedGlobs).scan(path: path)
         print(Reporter.formatConsoleReport(result: result))
 
         guard !skipJSON else { return }
@@ -53,8 +62,17 @@ struct Suggest: ParsableCommand {
     @Flag(name: .customLong("summary"), help: "Print only the summary counts, without the guide.")
     var summaryOnly: Bool = false
 
+    @Option(
+        name: .customLong("exclude"),
+        help: ArgumentHelp(
+            "Glob of paths to skip. Repeatable.",
+            discussion: "Matched against each path relative to the scan root and against its file name, e.g. --exclude 'Tests/*' --exclude '*.generated.swift'."
+        )
+    )
+    var excludedGlobs: [String] = []
+
     func run() throws {
-        let result = try SiriKitScanner().scan(path: path)
+        let result = try SiriKitScanner(excludedGlobs: excludedGlobs).scan(path: path)
         let suggestions = SuggestionGenerator().generateSuggestions(patterns: result.patterns)
         let guide = MigrationGuideFormatter.formatSuggestions(suggestions: suggestions)
 
@@ -121,6 +139,15 @@ struct Patch: AsyncParsableCommand {
     @Option(name: [.customLong("output"), .customShort("o")], help: "Write the patch report as JSON.")
     var outputPath: String?
 
+    @Option(
+        name: .customLong("exclude"),
+        help: ArgumentHelp(
+            "Glob of paths to skip. Repeatable.",
+            discussion: "Matched against each path relative to the scan root and against its file name, e.g. --exclude 'Tests/*' --exclude '*.generated.swift'."
+        )
+    )
+    var excludedGlobs: [String] = []
+
     func run() async throws {
         try await execute()
     }
@@ -143,7 +170,7 @@ struct Patch: AsyncParsableCommand {
         }
 
         let mode: AutoPatcher.Mode = dryRun ? .dryRun : .apply
-        let result = try SiriKitScanner().scan(path: path)
+        let result = try SiriKitScanner(excludedGlobs: excludedGlobs).scan(path: path)
         let suggestions = SuggestionGenerator().generateSuggestions(patterns: result.patterns)
 
         let patcher = AutoPatcher(mode: mode, validation: validationMode, allowProposals: includeStructural)
@@ -175,7 +202,7 @@ struct Patch: AsyncParsableCommand {
 
     private func runValidateOnly(mode: SyntaxValidator.Mode) async throws {
         let validator = SyntaxValidator(mode: mode)
-        let scan = try SiriKitScanner().scan(path: path)
+        let scan = try SiriKitScanner(excludedGlobs: excludedGlobs).scan(path: path)
         let errors = try await validator.validateProject(path)
         print(MigrationGuideFormatter.formatValidation(errors, fileCount: scan.filesScanned, mode: mode))
         if !errors.isEmpty { throw ExitCode(1) }
