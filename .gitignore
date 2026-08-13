@@ -8,3 +8,4 @@ DerivedData/
 .netrc
 migration_report.json
 suggestions.json
+AppIntentsMigrator.backup-*.tar.gz

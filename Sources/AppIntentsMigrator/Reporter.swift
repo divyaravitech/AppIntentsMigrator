@@ -69,6 +69,11 @@ enum Reporter {
         try writeJSON(SuggestionReport(root: root, suggestions: suggestions), to: outputPath)
     }
 
+    /// Writes a patch run's result as pretty-printed JSON.
+    static func generateJSONReport(patch: PatchResult, outputPath: String) throws {
+        try writeJSON(patch, to: outputPath)
+    }
+
     /// Writes an already-formatted text report (the console migration guide) to disk.
     static func writeText(_ contents: String, outputPath: String) throws {
         let url = fileURL(for: outputPath)

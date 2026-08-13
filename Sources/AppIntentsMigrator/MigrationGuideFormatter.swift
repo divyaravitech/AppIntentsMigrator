@@ -72,6 +72,87 @@ enum MigrationGuideFormatter {
         return lines
     }
 
+    // MARK: - Patch reports
+
+    /// A patch report: what changed (or would change), line by line, plus what was skipped.
+    static func formatPatchResult(
+        _ result: PatchResult,
+        mode: AutoPatcher.Mode,
+        validationMode: SyntaxValidator.Mode
+    ) -> String {
+        var lines: [String] = []
+
+        let title = mode == .dryRun
+            ? "App Intents Auto-Patcher — DRY RUN (nothing written)"
+            : "App Intents Auto-Patcher"
+        lines.append(title)
+        lines.append(String(repeating: "=", count: width))
+        lines.append("Files patched:  \(result.filesPatched)")
+        lines.append("Lines changed:  \(result.linesChanged)")
+        lines.append("Skipped:        \(result.skipped.count)")
+        lines.append("Validation:     \(result.validated ? "passed" : "FAILED") (swiftc -\(validationMode.rawValue))")
+        if let backup = result.backup {
+            lines.append("Backup:         \((backup.path as NSString).lastPathComponent) (\(backup.fileCount) files)")
+        }
+
+        if !result.edits.isEmpty {
+            lines.append("")
+            lines.append(mode == .dryRun ? "CHANGES THAT WOULD BE MADE" : "CHANGES")
+            lines.append(String(repeating: "-", count: width))
+            for edit in result.edits.sorted(by: { ($0.file, $0.line) < ($1.file, $1.line) }) {
+                lines.append("\(edit.file):\(edit.line)  [\(edit.safety.displayLabel) \(edit.patchRuleID)]")
+                lines.append("  - \(edit.before.trimmingCharacters(in: .whitespaces))")
+                if let after = edit.after {
+                    lines.append("  + \(after.trimmingCharacters(in: .whitespaces))")
+                } else {
+                    lines.append("  + (line removed)")
+                }
+                lines.append("")
+            }
+        }
+
+        if !result.validationErrors.isEmpty {
+            lines.append("VALIDATION ERRORS — changes were not kept")
+            lines.append(String(repeating: "-", count: width))
+            for error in result.validationErrors {
+                lines.append("  \(error.file):\(error.line)  \(error.error)")
+            }
+            lines.append("")
+        }
+
+        if !result.skipped.isEmpty {
+            lines.append("SKIPPED (\(result.skipped.count)) — migrate these by hand, see `suggest`")
+            lines.append(String(repeating: "-", count: width))
+            for reason in result.skipped.sorted() {
+                lines.append("  \(reason)")
+            }
+        }
+
+        return lines.joined(separator: "\n")
+    }
+
+    /// A standalone validation report, for `--validate-only`.
+    static func formatValidation(_ errors: [ValidationError], fileCount: Int, mode: SyntaxValidator.Mode) -> String {
+        var lines: [String] = []
+        lines.append("Swift Validation (swiftc -\(mode.rawValue))")
+        lines.append(String(repeating: "=", count: width))
+        lines.append("Files checked:  \(fileCount)")
+        lines.append("Files failing:  \(Set(errors.map(\.file)).count)")
+        lines.append("Errors:         \(errors.count)")
+
+        if errors.isEmpty {
+            lines.append("")
+            lines.append("All files parse cleanly.")
+            return lines.joined(separator: "\n")
+        }
+
+        lines.append("")
+        for error in errors.sorted(by: { ($0.file, $0.line) < ($1.file, $1.line) }) {
+            lines.append("  \(error.file):\(error.line)  \(error.error)")
+        }
+        return lines.joined(separator: "\n")
+    }
+
     private static func heading(_ text: String) -> String {
         let dashes = max(0, width - text.count - 4)
         return "-- \(text) \(String(repeating: "-", count: dashes))"

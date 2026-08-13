@@ -67,11 +67,11 @@ struct PatternDetector: Sendable {
     ///   - file: Path recorded on each finding.
     func detect(in source: String, file: String) -> [DetectedPattern] {
         var patterns: [DetectedPattern] = []
-        var blockCommentDepth = 0
+        var lexer = LexerState()
 
         for (index, rawLine) in source.split(separator: "\n", omittingEmptySubsequences: false).enumerated() {
             let line = String(rawLine).trimmingCharacters(in: CharacterSet(charactersIn: "\r"))
-            let code = Self.strippingComments(from: line, blockCommentDepth: &blockCommentDepth)
+            let code = Self.codeOnly(from: line, state: &lexer)
             guard !code.trimmingCharacters(in: .whitespaces).isEmpty else { continue }
 
             guard let (rule, match) = Self.firstMatch(in: code) else { continue }
@@ -102,29 +102,66 @@ struct PatternDetector: Sendable {
         return nil
     }
 
-    /// Blanks out comment text so that commented-out SiriKit code is not reported.
+    /// Lexer position carried from one line to the next.
+    struct LexerState {
+        var blockCommentDepth = 0
+        /// Number of `#` delimiters when inside a multi-line string literal; `nil` in code.
+        var multilineStringHashes: Int?
+    }
+
+    /// Returns only the executable code on a line, with comments and string literal
+    /// contents removed.
     ///
-    /// Tracks nested `/* */` blocks across lines via `blockCommentDepth`. A `//` inside a
-    /// string literal truncates the line early, which can hide a pattern on that line; that
-    /// trade is deliberate, since the alternative is a full Swift lexer.
-    private static func strippingComments(from line: String, blockCommentDepth: inout Int) -> String {
+    /// Both are excluded for the same reason: SiriKit symbols appearing there are not code
+    /// to migrate. Commented-out code should not be reported, and neither should the
+    /// contents of a string — a documentation sample, a fixture, or a regex that happens to
+    /// mention `INExtension` is text, not an API call. Patching such a line would edit the
+    /// inside of a literal, which still parses, so validation could not catch the damage.
+    ///
+    /// Handles nested `/* */`, `//`, single-line and multi-line strings, and the raw forms
+    /// (`#"…"#`, `#"""…"""#`) where the delimiter count decides what terminates the literal.
+    static func codeOnly(from line: String, state: inout LexerState) -> String {
         let characters = Array(line)
         var result = ""
         var index = 0
 
-        func matches(_ token: String) -> Bool {
+        func matches(_ token: String, at position: Int) -> Bool {
             let token = Array(token)
-            guard index + token.count <= characters.count else { return false }
-            return Array(characters[index..<(index + token.count)]) == token
+            guard position + token.count <= characters.count else { return false }
+            return Array(characters[position..<(position + token.count)]) == token
+        }
+
+        /// Number of consecutive `#` starting at `position`.
+        func hashRun(at position: Int) -> Int {
+            var count = 0
+            while position + count < characters.count, characters[position + count] == "#" { count += 1 }
+            return count
+        }
+
+        /// True when a multi-line literal closes here: `"""` followed by exactly `hashes` `#`.
+        func closesMultiline(at position: Int, hashes: Int) -> Bool {
+            guard matches("\"\"\"", at: position) else { return false }
+            return hashRun(at: position + 3) >= hashes
         }
 
         while index < characters.count {
-            if blockCommentDepth > 0 {
-                if matches("*/") {
-                    blockCommentDepth -= 1
+            // Inside a multi-line string: consume until the matching delimiter.
+            if let hashes = state.multilineStringHashes {
+                if closesMultiline(at: index, hashes: hashes) {
+                    state.multilineStringHashes = nil
+                    index += 3 + hashes
+                } else {
+                    index += 1
+                }
+                continue
+            }
+
+            if state.blockCommentDepth > 0 {
+                if matches("*/", at: index) {
+                    state.blockCommentDepth -= 1
                     index += 2
-                } else if matches("/*") {
-                    blockCommentDepth += 1
+                } else if matches("/*", at: index) {
+                    state.blockCommentDepth += 1
                     index += 2
                 } else {
                     index += 1
@@ -132,13 +169,24 @@ struct PatternDetector: Sendable {
                 continue
             }
 
-            if matches("/*") {
-                blockCommentDepth += 1
+            if matches("//", at: index) { break }
+            if matches("/*", at: index) {
+                state.blockCommentDepth += 1
                 index += 2
                 continue
             }
-            if matches("//") {
-                break
+
+            // A string literal opens with optional `#`s then a quote.
+            let hashes = hashRun(at: index)
+            let quoteIndex = index + hashes
+            if quoteIndex < characters.count, characters[quoteIndex] == "\"" {
+                if matches("\"\"\"", at: quoteIndex) {
+                    state.multilineStringHashes = hashes
+                    index = quoteIndex + 3
+                } else {
+                    index = endOfSingleLineString(characters, openingQuote: quoteIndex, hashes: hashes)
+                }
+                continue
             }
 
             result.append(characters[index])
@@ -146,6 +194,31 @@ struct PatternDetector: Sendable {
         }
 
         return result
+    }
+
+    /// Index just past the closing quote of a single-line string, or the end of the line
+    /// when the literal is unterminated.
+    private static func endOfSingleLineString(_ characters: [Character], openingQuote: Int, hashes: Int) -> Int {
+        var index = openingQuote + 1
+
+        while index < characters.count {
+            // Escapes only apply in non-raw strings; in raw strings the escape is `\#…`.
+            if characters[index] == "\\", hashes == 0 {
+                index += 2
+                continue
+            }
+            if characters[index] == "\"" {
+                var closingHashes = 0
+                while index + 1 + closingHashes < characters.count,
+                      characters[index + 1 + closingHashes] == "#" {
+                    closingHashes += 1
+                }
+                if closingHashes >= hashes { return index + 1 + hashes }
+            }
+            index += 1
+        }
+
+        return characters.count
     }
 
     /// Builds a rule from a literal pattern. The patterns are compile-time constants,
