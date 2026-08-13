@@ -69,7 +69,20 @@ actor AutoPatcher {
             )
         }
 
-        let plan = plan(for: original, displayPath: suggestions.first?.pattern.file ?? file, suggestions: suggestions)
+        let displayPath = suggestions.first?.pattern.file ?? file
+        var plan = plan(for: original, displayPath: displayPath, suggestions: suggestions, allowImportSwap: true)
+
+        // Swapping `import Intents` for `import AppIntents` is only safe once nothing in the
+        // file still needs the old module. Re-scan the patched text: if SiriKit symbols
+        // remain, keep the original import and leave the swap for after those are migrated.
+        // `swiftc -parse` cannot catch this — an unresolved symbol still parses.
+        if plan.swapsImport, residualSiriKitUsage(in: plan.patched, file: displayPath) {
+            plan = self.plan(for: original, displayPath: displayPath, suggestions: suggestions, allowImportSwap: false)
+            plan.skipped.append(
+                "\(displayPath) — import swap deferred: file still uses SiriKit symbols that need `import Intents`"
+            )
+        }
+
         guard !plan.edits.isEmpty else {
             return PatchResult(filesPatched: 0, linesChanged: 0, skipped: plan.skipped, validated: true)
         }
@@ -191,10 +204,28 @@ actor AutoPatcher {
         var patched: String
         var edits: [PatchEdit]
         var skipped: [String]
+
+        /// True when the plan rewrites an `import Intents` line.
+        var swapsImport: Bool {
+            edits.contains { $0.rule == .intentsImport }
+        }
+    }
+
+    /// True when the patched text still references SiriKit outside comments and strings,
+    /// meaning it continues to depend on the Intents module.
+    private func residualSiriKitUsage(in patched: String, file: String) -> Bool {
+        PatternDetector()
+            .detect(in: patched, file: file)
+            .contains { $0.rule != .intentsImport }
     }
 
     /// Works out the edits for one file without touching disk.
-    private func plan(for contents: String, displayPath: String, suggestions: [MigrationSuggestion]) -> Plan {
+    private func plan(
+        for contents: String,
+        displayPath: String,
+        suggestions: [MigrationSuggestion],
+        allowImportSwap: Bool
+    ) -> Plan {
         var lines = contents.components(separatedBy: "\n")
         var edits: [PatchEdit] = []
         var skipped: [String] = []
@@ -204,6 +235,8 @@ actor AutoPatcher {
             let lineNumber = suggestion.pattern.line
             let index = lineNumber - 1
             guard lines.indices.contains(index), !deletedLines.contains(lineNumber) else { continue }
+
+            if !allowImportSwap, suggestion.pattern.rule == .intentsImport { continue }
 
             let candidates = PatchingRules.rules(for: suggestion.pattern, allowingProposals: allowProposals)
             guard let rule = candidates.first(where: { PatchingRules.apply($0, to: lines[index]).matched }) else {
