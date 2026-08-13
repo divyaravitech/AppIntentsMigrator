@@ -24,14 +24,16 @@ struct PatternDetector: Sendable {
         rule(.delegateMethod, .handlerForIntent, #"\bfunc\s+handler\s*\(\s*for\s+\w+\s*:"#),
         rule(.delegateMethod, .handleIntent, #"\bfunc\s+handle\s*\(\s*\w+\s*:\s*IN\w+"#),
         rule(.delegateMethod, .confirmIntent, #"\bfunc\s+confirm\s*\(\s*\w+\s*:\s*IN\w+"#),
-        rule(.delegateMethod, .resolveMethod, #"\bfunc\s+resolve\w*\s*\(\s*for\s+\w+\s*:\s*IN\w+"#),
+        // Matched on the `func` line alone rather than the whole signature: real code wraps
+        // these across lines, and a rule spanning the parameter list would never fire.
+        rule(.delegateMethod, .resolveMethod, #"\bfunc\s+resolve[A-Z]\w*\s*\("#),
         rule(.delegateMethod, .applicationHandlerFor, #"\bhandlerFor\s*\w*\s*:"#),
         rule(
             .delegateMethod,
             .appLaunchDelegate,
             #"\b(?:didFinishLaunchingWithOptions|willFinishLaunchingWithOptions|applicationDidFinishLaunching|applicationWillFinishLaunching)\b"#
         ),
-        rule(.delegateMethod, .userActivityContinuation, #"\bfunc\s+application\s*\([^)]*\bcontinue\s+userActivity\b"#),
+        rule(.delegateMethod, .userActivityContinuation, #"\bcontinue\s+userActivity\s*:"#),
 
         // MARK: Intents
         rule(.inIntent, .customIntentSubclass, #"\bclass\s+\w+\s*:[^{]*\bIN\w*Intent\b"#),

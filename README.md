@@ -105,6 +105,19 @@ App/AppDelegate.swift:7  [auto drop-siri-authorization]
 
 **Always build in Xcode after patching.**
 
+## Try it without a SiriKit project
+
+`Examples/LegacySiriKitApp` is a deliberately un-migrated SiriKit app — an Intents
+extension, generated intent classes, donations, shortcut UI and an `Info.plist`. It
+triggers all 22 detection rules.
+
+```bash
+swift run app-intents-migrator scan Examples/LegacySiriKitApp
+```
+
+See [`Examples/LegacySiriKitApp/README.md`](Examples/LegacySiriKitApp/README.md) for what
+each file demonstrates.
+
 ## Installation
 
 Clone and build:
@@ -197,8 +210,18 @@ Each with an Apple documentation link checked against Apple's documentation API.
 - [x] Phase 1: Scanner
 - [x] Phase 2: Suggestion Engine
 - [x] Phase 3: Auto-patcher (safe mechanical migrations)
-- [ ] Test suite
+- [x] Test suite
 - [ ] Phase 4: Xcode plugin integration
+
+## Tests
+
+```bash
+swift test
+```
+
+35 tests covering the detector (comments, string literals, wrapped signatures, property
+lists), the migration library's coverage invariants, the patching safety guards, backup
+round-trips, and exclusion globs.
 
 ## Requirements
 

@@ -129,9 +129,12 @@ actor AutoPatcher {
             return PatchResult(filesPatched: 0, linesChanged: 0, skipped: [], validated: true)
         }
 
-        // Requirement: always back up before modifying anything.
+        // Always back up before modifying anything — but only when there is something this
+        // patcher could modify. A project whose only findings are in Info.plist has no
+        // Swift files to archive, and must report that rather than fail on the backup.
+        let hasPatchableFiles = byFile.keys.contains { $0.hasSuffix(".swift") }
         var backup: BackupInfo?
-        if mode == .apply {
+        if mode == .apply, hasPatchableFiles {
             backup = try await backupManager.createBackup(projectPath: root)
         }
 
