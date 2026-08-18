@@ -2,9 +2,7 @@ class AppIntentsMigrator < Formula
   desc "Scan and migrate SiriKit code to App Intents"
   homepage "https://github.com/divyaravitech/AppIntentsMigrator"
   url "https://github.com/divyaravitech/AppIntentsMigrator/archive/refs/tags/v1.0.0.tar.gz"
-  # Filled in after the tag is pushed:
-  #   curl -sL <url> | shasum -a 256
-  sha256 "REPLACE_WITH_TARBALL_SHA256"
+  sha256 "0019dfc4b32d63c1392aa264aed2253c1e0c2fb09216f8e2cc269bbfb8bb49b5"
   license "MIT"
   head "https://github.com/divyaravitech/AppIntentsMigrator.git", branch: "main"
 
