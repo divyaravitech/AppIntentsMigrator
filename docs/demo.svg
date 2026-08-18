@@ -1,0 +1,25 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="644" height="439" viewBox="0 0 644 439" font-family="ui-monospace,SFMono-Regular,Menlo,Consolas,monospace" font-size="13">
+  <rect width="644" height="439" rx="10" fill="#0d1117" stroke="#30363d"/>
+  <rect width="644" height="34" rx="10" fill="#161b22"/>
+  <rect y="24" width="644" height="10" fill="#161b22"/>
+  <circle cx="20" cy="17" r="6" fill="#ff5f56"/><circle cx="40" cy="17" r="6" fill="#ffbd2e"/><circle cx="60" cy="17" r="6" fill="#27c93f"/>
+  <text x="322" y="22" fill="#8b949e" font-size="12" text-anchor="middle">app-intents-migrator</text>
+    <text x="22" y="56" fill="#7ee787" xml:space="preserve">$ app-intents-migrator scan MyApp</text>
+  <text x="22" y="75" fill="#79c0ff" xml:space="preserve">SiriKit Patterns Found:</text>
+  <text x="22" y="94" fill="#c9d1d9" xml:space="preserve">  - INExtension subclasses: 2</text>
+  <text x="22" y="113" fill="#c9d1d9" xml:space="preserve">  - INIntent subclasses: 23</text>
+  <text x="22" y="132" fill="#c9d1d9" xml:space="preserve">  - Delegate methods: 9</text>
+  <text x="22" y="151" fill="#c9d1d9" xml:space="preserve">  - Other SiriKit patterns: 27</text>
+  <text x="22" y="170" fill="#c9d1d9" xml:space="preserve"></text>
+  <text x="22" y="189" fill="#c9d1d9" xml:space="preserve">  Total patterns: 61</text>
+  <text x="22" y="208" fill="#c9d1d9" xml:space="preserve">  Files affected: 8</text>
+  <text x="22" y="246" fill="#7ee787" xml:space="preserve">$ app-intents-migrator patch MyApp --dry-run</text>
+  <text x="22" y="265" fill="#79c0ff" xml:space="preserve">App Intents Auto-Patcher — DRY RUN (nothing written)</text>
+  <text x="22" y="284" fill="#c9d1d9" xml:space="preserve">==============================================================================</text>
+  <text x="22" y="303" fill="#c9d1d9" xml:space="preserve">Files patched:  1</text>
+  <text x="22" y="322" fill="#c9d1d9" xml:space="preserve">Lines changed:  1</text>
+  <text x="22" y="341" fill="#d29922" xml:space="preserve">Skipped:        59</text>
+  <text x="22" y="360" fill="#c9d1d9" xml:space="preserve">Validation:     passed (swiftc -parse)</text>
+  <text x="22" y="379" fill="#f85149" xml:space="preserve">  - activity.isEligibleForPrediction = true</text>
+  <text x="22" y="398" fill="#3fb950" xml:space="preserve">  + (line removed)</text>
+</svg>

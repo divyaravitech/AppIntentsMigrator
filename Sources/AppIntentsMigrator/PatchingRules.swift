@@ -68,7 +68,7 @@ enum PatchingRules {
             rule: .predictionEligibility,
             safety: .automatic,
             summary: "Delete NSUserActivity prediction flag (superseded by intent donations)",
-            pattern: #"^\s*[\w.]+\.isEligibleFor(?:Prediction|Search|PublicIndexing|Handoff)\s*=\s*(?:true|false)\s*$"#,
+            pattern: #"^\s*[\w.]+\.isEligibleForPrediction\s*=\s*true\s*$"#,
             action: .deleteLine,
             requiresSelfContainedLine: true
         ),

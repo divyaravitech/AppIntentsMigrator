@@ -1,0 +1,29 @@
+name: Patch produced broken code
+description: `patch` wrote something that doesn't compile, or changed behaviour
+labels: ["patcher", "priority"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        **Restore your backup first** — `AppIntentsMigrator.backup-*.tar.gz` in your project
+        root, or `patch <path> --rollback <archive>`. Then tell us what happened.
+  - type: textarea
+    id: diff
+    attributes:
+      label: The diff the patcher produced
+      render: diff
+    validations:
+      required: true
+  - type: input
+    id: command
+    attributes:
+      label: The exact command you ran
+      placeholder: app-intents-migrator patch ~/MyApp --include-structural
+    validations:
+      required: true
+  - type: checkboxes
+    id: structural
+    attributes:
+      label: Confirm
+      options:
+        - label: I did NOT pass `--include-structural` (structural rewrites are documented as needing follow-up edits)

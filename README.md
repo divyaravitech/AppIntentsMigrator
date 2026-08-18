@@ -2,6 +2,8 @@
 
 A Swift CLI tool to scan and migrate SiriKit code to App Intents (iOS 27).
 
+<img src="docs/demo.svg" alt="Scanning a SiriKit project and previewing a patch" width="700">
+
 ## The Problem
 
 SiriKit received a formal deprecation notice at WWDC 2026, and App Intents is now the only
@@ -111,6 +113,18 @@ App/AppDelegate.swift:7  [auto drop-siri-authorization]
 `--typecheck` opts into the stricter check, but a file compiled outside its module cannot see the rest of your project, and building for the host platform makes `import UIKit` fail. On an iOS project it reports errors that are not real. Use it when applying structural rewrites, and read the failures critically.
 
 **Always build in Xcode after patching.**
+
+## Validated against real projects
+
+Detection is checked against production SiriKit code, not only the bundled sample:
+
+| Project | Swift files | Findings | Files missed vs `grep` |
+| --- | --- | --- | --- |
+| [Automattic/simplenote-ios](https://github.com/Automattic/simplenote-ios) | 358 | 49 | 0 |
+| [LoopKit/Loop](https://github.com/LoopKit/Loop) | 398 | 41 | 0 |
+
+Both scan in about a second. Running against Loop is what surfaced the
+`isEligibleForHandoff` bug fixed in the prediction-flag rule.
 
 ## Try it without a SiriKit project
 

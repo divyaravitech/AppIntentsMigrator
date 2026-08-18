@@ -639,17 +639,18 @@ enum CommonPatterns {
             beforeCode: #"""
             let activity = NSUserActivity(activityType: "com.example.order")
             activity.isEligibleForPrediction = true
-            activity.isEligibleForSearch = true
             activity.suggestedInvocationPhrase = "Order coffee"
             """#,
             afterCode: #"""
             try await IntentDonationManager.shared.donate(intent: OrderCoffee())
             """#,
             explanation: """
-            NSUserActivity prediction flags were how you told the system an activity was \
-            worth suggesting. Donating the intent now carries that signal, with the \
-            advantage that the system knows the parameters involved. Keep NSUserActivity \
-            only for state restoration and Handoff; drop the prediction flags.
+            isEligibleForPrediction was how you told the system an activity was worth \
+            suggesting. Donating the intent now carries that signal, with the advantage \
+            that the system knows the parameters involved. Drop that flag only — \
+            isEligibleForSearch and isEligibleForPublicIndexing are Spotlight indexing and \
+            isEligibleForHandoff is Handoff; all three are still supported and unaffected \
+            by this migration.
             """,
             complexity: .autoPatchable,
             appleDocLink: "https://developer.apple.com/documentation/appintents/donations-and-discovery"

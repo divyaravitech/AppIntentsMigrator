@@ -52,7 +52,10 @@ struct PatternDetector: Sendable {
         ),
         rule(.otherSiriKit, .siriAuthorization, #"\b(?:INPreferences|INSiriAuthorizationStatus)\b"#),
         rule(.otherSiriKit, .invocationPhrase, #"\bsuggestedInvocationPhrase\b"#),
-        rule(.otherSiriKit, .predictionEligibility, #"\bisEligibleFor(?:Prediction|Search|PublicIndexing|Handoff)\b"#),
+        // Only the prediction flag. isEligibleForSearch and isEligibleForPublicIndexing are
+        // Spotlight indexing, and isEligibleForHandoff is Handoff — all still supported and
+        // none part of this migration.
+        rule(.otherSiriKit, .predictionEligibility, #"\bisEligibleForPrediction\b"#),
         rule(.otherSiriKit, .infoPlistIntents, #"\b(?:IntentsSupported|IntentsRestrictedWhileLocked|INIntentsSupported)\b"#),
         rule(
             .otherSiriKit,
@@ -71,12 +74,29 @@ struct PatternDetector: Sendable {
         var patterns: [DetectedPattern] = []
         var lexer = LexerState()
 
+        // A declaration wrapped across lines is one site, not several. Only parentheses and
+        // brackets are counted, never braces: a wrapped signature or call is held open by
+        // parens, whereas a function *body* is braces, and separate statements inside one
+        // body must stay separate findings.
+        var openDepth = 0
+        var rulesInDeclaration: Set<RuleID> = []
+
         for (index, rawLine) in source.split(separator: "\n", omittingEmptySubsequences: false).enumerated() {
             let line = String(rawLine).trimmingCharacters(in: CharacterSet(charactersIn: "\r"))
             let code = Self.codeOnly(from: line, state: &lexer)
             guard !code.trimmingCharacters(in: .whitespaces).isEmpty else { continue }
 
+            let isContinuation = openDepth > 0
+            defer {
+                openDepth = max(0, openDepth + Self.bracketDelta(of: code))
+                if openDepth == 0 { rulesInDeclaration.removeAll() }
+            }
+
             guard let (rule, match) = Self.firstMatch(in: code) else { continue }
+            // The same rule firing again on a continuation line is the same finding.
+            guard !(isContinuation && rulesInDeclaration.contains(rule.id)) else { continue }
+            rulesInDeclaration.insert(rule.id)
+
             patterns.append(
                 DetectedPattern(
                     patternType: rule.type,
@@ -90,6 +110,17 @@ struct PatternDetector: Sendable {
         }
 
         return patterns
+    }
+
+    /// Net change in parenthesis and bracket nesting across a line of code.
+    private static func bracketDelta(of code: String) -> Int {
+        code.reduce(into: 0) { depth, character in
+            switch character {
+            case "(", "[": depth += 1
+            case ")", "]": depth -= 1
+            default: break
+            }
+        }
     }
 
     // MARK: - Property lists
