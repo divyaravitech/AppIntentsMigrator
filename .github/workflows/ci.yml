@@ -1,0 +1,52 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  build-and-test:
+    name: Build and test
+    runs-on: macos-15
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Show toolchain
+        run: swift --version
+
+      - name: Build
+        run: swift build -v
+
+      - name: Test
+        run: swift test
+
+      # The tool must never report findings in its own sources. A regression here means
+      # the detector has started matching comments or string literals again — the class of
+      # bug that once had it rewriting its own migration library.
+      - name: Self-scan is clean
+        run: |
+          swift run app-intents-migrator scan . --no-json --exclude 'Examples/*' | tee /tmp/self-scan.txt
+          grep -q "Total patterns: 0" /tmp/self-scan.txt
+
+      # The sample app is the coverage fixture: every rule must still fire on it.
+      - name: Sample app still triggers every rule
+        run: swift run app-intents-migrator scan Examples/LegacySiriKitApp --no-json
+
+      # Patching must never modify the working tree in a dry run.
+      - name: Dry run leaves the tree untouched
+        run: |
+          swift run app-intents-migrator patch Examples/LegacySiriKitApp --dry-run
+          git diff --exit-code
+
+  strict-concurrency:
+    name: Strict concurrency
+    runs-on: macos-15
+    steps:
+      - uses: actions/checkout@v4
+      - name: Build with complete concurrency checking
+        run: swift build -Xswiftc -strict-concurrency=complete

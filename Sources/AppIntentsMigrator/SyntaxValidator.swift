@@ -64,10 +64,16 @@ actor SyntaxValidator {
     // MARK: - Compiler invocation
 
     private nonisolated static func validate(path: String, mode: Mode) throws -> ValidationResult {
-        let outcome = try BackupManager.run("/usr/bin/xcrun", ["swiftc", "-\(mode.rawValue)", path])
+        let outcome: Subprocess.Outcome
+        do {
+            outcome = try Subprocess.run("/usr/bin/xcrun", ["swiftc", "-\(mode.rawValue)", path])
+        } catch let failure as Subprocess.Failure {
+            // A compiler we cannot launch is a tooling problem, not invalid code. Reporting
+            // it as a backup failure (as the shared helper used to) actively misled.
+            throw PatchError.toolchainUnavailable(failure.errorDescription ?? "\(failure)")
+        }
 
-        // xcrun itself failing (no toolchain) is a tooling problem, not a code problem —
-        // surface it rather than reporting the file as invalid.
+        // xcrun exiting non-zero without diagnostics means the toolchain is unusable.
         if outcome.status != 0, outcome.output.contains("unable to find utility") {
             throw PatchError.toolchainUnavailable(outcome.output.trimmingCharacters(in: .whitespacesAndNewlines))
         }
@@ -96,10 +102,9 @@ actor SyntaxValidator {
         return errors
     }
 
+    /// Swift files under `path`, or the file itself when `path` is one.
     private nonisolated static func swiftFiles(in path: String) throws -> [String] {
-        let root = URL(fileURLWithPath: (path as NSString).expandingTildeInPath)
-            .standardizedFileURL
-            .resolvingSymlinksInPath()
+        let root = FileWalker.normalize(path)
 
         var isDirectory: ObjCBool = false
         guard FileManager.default.fileExists(atPath: root.path, isDirectory: &isDirectory) else {
@@ -107,28 +112,6 @@ actor SyntaxValidator {
         }
         guard isDirectory.boolValue else { return [root.path] }
 
-        let excluded: Set<String> = [".build", ".git", ".swiftpm", "DerivedData", "Pods", "Carthage", "node_modules"]
-        guard
-            let enumerator = FileManager.default.enumerator(
-                at: root,
-                includingPropertiesForKeys: [.isDirectoryKey],
-                options: [.skipsHiddenFiles, .skipsPackageDescendants],
-                errorHandler: { _, _ in true }
-            )
-        else {
-            throw SiriKitScanner.ScanError.notEnumerable(root.path)
-        }
-
-        var files: [String] = []
-        while let url = enumerator.nextObject() as? URL {
-            let isDirectory = (try? url.resourceValues(forKeys: [.isDirectoryKey]))?.isDirectory ?? false
-            if isDirectory {
-                if excluded.contains(url.lastPathComponent) { enumerator.skipDescendants() }
-                continue
-            }
-            if url.pathExtension == "swift" { files.append(url.resolvingSymlinksInPath().path) }
-        }
-
-        return files.sorted()
+        return try FileWalker(extensions: ["swift"]).files(in: root).map(\.path)
     }
 }

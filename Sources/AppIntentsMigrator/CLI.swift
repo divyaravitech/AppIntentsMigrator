@@ -1,6 +1,7 @@
 import ArgumentParser
 import Foundation
 
+@main
 struct AppIntentsMigrator: AsyncParsableCommand {
     static let configuration = CommandConfiguration(
         commandName: "app-intents-migrator",
@@ -149,15 +150,6 @@ struct Patch: AsyncParsableCommand {
     var excludedGlobs: [String] = []
 
     func run() async throws {
-        try await execute()
-    }
-
-    /// The command body, under a name that does not collide with `ParsableCommand.run()`.
-    ///
-    /// `run()` is overloaded — sync on ParsableCommand, async on AsyncParsableCommand — and
-    /// at a call site the sync overload wins even in an async context. A distinct name is
-    /// unambiguously async, so the entry point in this file can dispatch to it reliably.
-    func execute() async throws {
         let validationMode: SyntaxValidator.Mode = typecheck ? .typecheck : .parse
 
         if let rollbackArchive {
@@ -207,24 +199,4 @@ struct Patch: AsyncParsableCommand {
         print(MigrationGuideFormatter.formatValidation(errors, fileCount: scan.filesScanned, mode: mode))
         if !errors.isEmpty { throw ExitCode(1) }
     }
-}
-
-// ArgumentParser's async entry point cannot be reached from here: `@main` is illegal in a
-// file named main.swift, and `await AppIntentsMigrator.main()` resolves to the synchronous
-// `main()` that ParsableCommand supplies (a sync function also converts implicitly to an
-// async function type, so annotating the reference does not disambiguate either). Taking
-// that path makes ArgumentParser abort with "Asynchronous root command needs availability
-// annotation" — the annotation is not the actual fix.
-//
-// Dispatching by hand through the `AsyncParsableCommand` existential selects the async
-// `run()` requirement, which is what ArgumentParser's own async `main()` does internally.
-do {
-    var command = try AppIntentsMigrator.parseAsRoot()
-    if let patch = command as? Patch {
-        try await patch.execute()
-    } else {
-        try command.run()
-    }
-} catch {
-    AppIntentsMigrator.exit(withError: error)
 }

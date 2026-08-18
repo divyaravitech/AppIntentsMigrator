@@ -16,9 +16,7 @@ actor BackupManager {
     /// - Throws: `PatchError.backupFailed` if the archive cannot be written. Callers must
     ///   treat that as fatal and leave the project untouched.
     func createBackup(projectPath: String) throws -> BackupInfo {
-        let root = URL(fileURLWithPath: (projectPath as NSString).expandingTildeInPath)
-            .standardizedFileURL
-            .resolvingSymlinksInPath()
+        let root = FileWalker.normalize(projectPath)
 
         var isDirectory: ObjCBool = false
         guard fileManager.fileExists(atPath: root.path, isDirectory: &isDirectory), isDirectory.boolValue else {
@@ -116,58 +114,23 @@ actor BackupManager {
         return "\(base)-\(time.string(from: date)).tar.gz"
     }
 
-    /// Swift files under `root`, as paths relative to it, excluding build output.
+    /// Swift files under `root`, as paths relative to it.
+    ///
+    /// Scope comes from `FileWalker`, so a backup covers exactly the files the patcher
+    /// could modify.
     private func swiftFiles(in root: URL) throws -> [String] {
-        let excluded: Set<String> = [".build", ".git", ".swiftpm", "DerivedData", "Pods", "Carthage", "node_modules"]
-        guard
-            let enumerator = fileManager.enumerator(
-                at: root,
-                includingPropertiesForKeys: [.isDirectoryKey],
-                options: [.skipsHiddenFiles, .skipsPackageDescendants],
-                errorHandler: { _, _ in true }
-            )
-        else {
-            throw PatchError.backupFailed("could not enumerate \(root.path)")
-        }
-
-        let rootPath = root.path.hasSuffix("/") ? root.path : root.path + "/"
-        var paths: [String] = []
-
-        while let url = enumerator.nextObject() as? URL {
-            let isDirectory = (try? url.resourceValues(forKeys: [.isDirectoryKey]))?.isDirectory ?? false
-            if isDirectory {
-                if excluded.contains(url.lastPathComponent) { enumerator.skipDescendants() }
-                continue
-            }
-            guard url.pathExtension == "swift" else { continue }
-            let resolved = url.resolvingSymlinksInPath().path
-            guard resolved.hasPrefix(rootPath) else { continue }
-            paths.append(String(resolved.dropFirst(rootPath.count)))
-        }
-
-        return paths.sorted()
+        try FileWalker(extensions: ["swift"])
+            .files(in: root)
+            .map { FileWalker.relativePath(of: $0, from: root) }
     }
 
-    /// Runs a subprocess, capturing merged stdout/stderr.
+    /// Runs `tar`, reporting a launch failure as a backup problem.
     nonisolated static func run(_ launchPath: String, _ arguments: [String]) throws -> (status: Int32, output: String) {
-        let process = Process()
-        process.executableURL = URL(fileURLWithPath: launchPath)
-        process.arguments = arguments
-
-        let pipe = Pipe()
-        process.standardOutput = pipe
-        process.standardError = pipe
-
         do {
-            try process.run()
-        } catch {
-            throw PatchError.backupFailed("could not launch \(launchPath): \(error.localizedDescription)")
+            let outcome = try Subprocess.run(launchPath, arguments)
+            return (outcome.status, outcome.output)
+        } catch let failure as Subprocess.Failure {
+            throw PatchError.backupFailed(failure.errorDescription ?? "\(failure)")
         }
-
-        // Drain before waiting: a full pipe buffer would otherwise deadlock the child.
-        let data = pipe.fileHandleForReading.readDataToEndOfFile()
-        process.waitUntilExit()
-
-        return (process.terminationStatus, String(decoding: data, as: UTF8.self))
     }
 }
