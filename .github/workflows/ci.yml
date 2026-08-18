@@ -43,6 +43,16 @@ jobs:
           swift run app-intents-migrator patch Examples/LegacySiriKitApp --dry-run
           git diff --exit-code
 
+      # Xcode parses these; a format change silently breaks editor integration.
+      - name: Xcode diagnostics are well formed
+        run: |
+          swift run app-intents-migrator scan Examples/LegacySiriKitApp --xcode > /tmp/diags.txt
+          grep -qE '^/.+\.swift:[0-9]+: warning: SiriKit: ' /tmp/diags.txt
+          test "$(grep -cvE '^/.+:[0-9]+: (warning|error): ' /tmp/diags.txt)" -eq 0
+
+      - name: Package plugin runs
+        run: swift package app-intents-scan | grep -q 'Total patterns:'
+
   strict-concurrency:
     name: Strict concurrency
     runs-on: macos-15

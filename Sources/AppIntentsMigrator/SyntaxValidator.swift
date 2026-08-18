@@ -1,5 +1,18 @@
 import Foundation
 
+/// Checks that Swift source is still well-formed.
+///
+/// A protocol so the patcher's rollback path can be exercised with a validator that fails
+/// on demand. That branch is the tool's last line of defence and is otherwise unreachable
+/// in a test: the real validator agrees with itself, so it never rejects what it just passed.
+protocol SourceValidating: Sendable {
+    /// Checks one file in isolation.
+    func validateFile(_ path: String) async throws -> ValidationResult
+    /// Checks files as a set. In `-typecheck` mode they are compiled together, so breakage
+    /// that spans files surfaces here and not in `validateFile`.
+    func validateFiles(_ paths: [String]) async throws -> [ValidationError]
+}
+
 /// Checks patched files with the Swift compiler front end.
 ///
 /// **What this can and cannot catch.** The default mode runs `swiftc -parse`, which is a
@@ -13,7 +26,7 @@ import Foundation
 ///
 /// The practical consequence: passing validation means "still parses", which is enough to
 /// catch a botched text substitution, and is not a promise that the project builds.
-actor SyntaxValidator {
+actor SyntaxValidator: SourceValidating {
 
     enum Mode: String, Sendable {
         /// `swiftc -parse` — syntax only. Reliable on any file.
@@ -42,31 +55,28 @@ actor SyntaxValidator {
         return try await validateFiles(files)
     }
 
-    /// Validates a specific set of files concurrently.
+    /// Validates files as a single compiler invocation.
+    ///
+    /// This is deliberately not a loop over `validateFile`. Under `-typecheck` the files are
+    /// compiled as one unit, so a patch that breaks a reference *between* files is caught
+    /// here — the case a per-file check cannot see.
     func validateFiles(_ paths: [String]) async throws -> [ValidationError] {
         guard !paths.isEmpty else { return [] }
-        let mode = self.mode
-
-        let results = try await withThrowingTaskGroup(of: ValidationResult.self) { group in
-            for path in paths {
-                group.addTask { try Self.validate(path: path, mode: mode) }
-            }
-            var collected: [ValidationResult] = []
-            for try await result in group { collected.append(result) }
-            return collected
-        }
-
-        return results
-            .sorted { $0.file < $1.file }
-            .flatMap(\.errors)
+        let outcome = try Self.runCompiler(on: paths, mode: mode)
+        return Self.parseDiagnostics(outcome.output, defaultFile: paths[0])
     }
 
     // MARK: - Compiler invocation
 
     private nonisolated static func validate(path: String, mode: Mode) throws -> ValidationResult {
+        let outcome = try runCompiler(on: [path], mode: mode)
+        return ValidationResult(file: path, errors: parseDiagnostics(outcome.output, defaultFile: path))
+    }
+
+    private nonisolated static func runCompiler(on paths: [String], mode: Mode) throws -> Subprocess.Outcome {
         let outcome: Subprocess.Outcome
         do {
-            outcome = try Subprocess.run("/usr/bin/xcrun", ["swiftc", "-\(mode.rawValue)", path])
+            outcome = try Subprocess.run("/usr/bin/xcrun", ["swiftc", "-\(mode.rawValue)"] + paths)
         } catch let failure as Subprocess.Failure {
             // A compiler we cannot launch is a tooling problem, not invalid code. Reporting
             // it as a backup failure (as the shared helper used to) actively misled.
@@ -77,12 +87,15 @@ actor SyntaxValidator {
         if outcome.status != 0, outcome.output.contains("unable to find utility") {
             throw PatchError.toolchainUnavailable(outcome.output.trimmingCharacters(in: .whitespacesAndNewlines))
         }
-
-        return ValidationResult(file: path, errors: parseDiagnostics(outcome.output, file: path))
+        return outcome
     }
 
     /// Extracts `path:line:column: error: message` diagnostics from compiler output.
-    static func parseDiagnostics(_ output: String, file: String) -> [ValidationError] {
+    ///
+    /// The path is taken from the diagnostic itself, so a multi-file invocation attributes
+    /// each error to the file that caused it. `defaultFile` covers diagnostics with no
+    /// location (a bare driver error, say).
+    static func parseDiagnostics(_ output: String, defaultFile: String) -> [ValidationError] {
         var errors: [ValidationError] = []
 
         for line in output.split(separator: "\n") {
@@ -95,8 +108,9 @@ actor SyntaxValidator {
             // location is "<path>:<line>:<column>"
             let parts = location.split(separator: ":")
             let lineNumber = parts.count >= 3 ? Int(parts[parts.count - 2]) ?? 0 : 0
+            let path = parts.count >= 3 ? parts[0..<(parts.count - 2)].joined(separator: ":") : defaultFile
 
-            errors.append(ValidationError(file: file, line: lineNumber, error: message))
+            errors.append(ValidationError(file: path, line: lineNumber, error: message))
         }
 
         return errors

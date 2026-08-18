@@ -6,7 +6,7 @@ struct AppIntentsMigrator: AsyncParsableCommand {
     static let configuration = CommandConfiguration(
         commandName: "app-intents-migrator",
         abstract: "Migration tooling for moving legacy SiriKit code to App Intents.",
-        version: "0.1.0",
+        version: "1.0.0",
         subcommands: [Scan.self, Suggest.self, Patch.self]
     )
 }
@@ -26,6 +26,21 @@ struct Scan: ParsableCommand {
     @Flag(name: .customLong("no-json"), help: "Skip writing the JSON report.")
     var skipJSON: Bool = false
 
+    @Flag(
+        name: .customLong("xcode"),
+        help: ArgumentHelp(
+            "Emit findings as Xcode diagnostics.",
+            discussion: "For a Run Script build phase: prints `file:line: warning: …` so findings appear inline in the editor. Implies --no-json."
+        )
+    )
+    var xcodeDiagnostics: Bool = false
+
+    @Flag(
+        name: .customLong("warnings-as-errors"),
+        help: "With --xcode, emit errors instead of warnings so the build fails."
+    )
+    var warningsAsErrors: Bool = false
+
     @Option(
         name: .customLong("exclude"),
         help: ArgumentHelp(
@@ -37,6 +52,18 @@ struct Scan: ParsableCommand {
 
     func run() throws {
         let result = try SiriKitScanner(excludedGlobs: excludedGlobs).scan(path: path)
+
+        if xcodeDiagnostics {
+            let diagnostics = Reporter.formatXcodeDiagnostics(
+                result: result,
+                severity: warningsAsErrors ? .error : .warning
+            )
+            if !diagnostics.isEmpty { print(diagnostics) }
+            // A build phase must not fail the build over findings unless asked to.
+            if warningsAsErrors, result.totalCount > 0 { throw ExitCode(1) }
+            return
+        }
+
         print(Reporter.formatConsoleReport(result: result))
 
         guard !skipJSON else { return }

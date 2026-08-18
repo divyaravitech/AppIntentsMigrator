@@ -74,6 +74,33 @@ enum Reporter {
         try writeJSON(patch, to: outputPath)
     }
 
+    /// Emits findings in the compiler diagnostic format Xcode parses.
+    ///
+    /// `<absolute path>:<line>: warning: <message>` on stdout of a Run Script build phase
+    /// becomes an inline warning on the offending line, so a SiriKit call is flagged where
+    /// the developer is already looking rather than in a separate report.
+    ///
+    /// Paths must be absolute for Xcode to resolve them back to a file.
+    static func formatXcodeDiagnostics(result: ScanResult, severity: Severity = .warning) -> String {
+        result.patterns.map { pattern in
+            let path = absolutePath(of: pattern.file, root: result.root)
+            let migration = CommonPatterns.byRule[pattern.rule]
+            let advice = migration.map { " → \($0.title) [\($0.complexity.displayLabel)]" } ?? ""
+            return "\(path):\(pattern.line): \(severity.rawValue): SiriKit: \(pattern.rule.rawValue)\(advice)"
+        }
+        .joined(separator: "\n")
+    }
+
+    enum Severity: String, Sendable {
+        case warning
+        /// Fails the build. For teams that want the migration enforced rather than advised.
+        case error
+    }
+
+    private static func absolutePath(of file: String, root: String) -> String {
+        file.hasPrefix("/") ? file : (root as NSString).appendingPathComponent(file)
+    }
+
     /// Writes an already-formatted text report (the console migration guide) to disk.
     static func writeText(_ contents: String, outputPath: String) throws {
         let url = fileURL(for: outputPath)

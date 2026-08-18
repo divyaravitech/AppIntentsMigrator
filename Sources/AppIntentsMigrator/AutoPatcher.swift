@@ -24,13 +24,18 @@ actor AutoPatcher {
     /// When true, structural (`.proposalOnly`) rules are applied too. Off by default.
     let allowProposals: Bool
 
-    private let validator: SyntaxValidator
+    private let validator: any SourceValidating
     private let backupManager = BackupManager()
 
     init(mode: Mode = .dryRun, validation: SyntaxValidator.Mode = .parse, allowProposals: Bool = false) {
+        self.init(mode: mode, validator: SyntaxValidator(mode: validation), allowProposals: allowProposals)
+    }
+
+    /// Injects the validator, so tests can drive the rollback path with one that fails.
+    init(mode: Mode = .dryRun, validator: any SourceValidating, allowProposals: Bool = false) {
         self.mode = mode
         self.allowProposals = allowProposals
-        self.validator = SyntaxValidator(mode: validation)
+        self.validator = validator
     }
 
     // MARK: - Single file

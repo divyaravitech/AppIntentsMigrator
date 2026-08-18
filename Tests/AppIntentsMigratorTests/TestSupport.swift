@@ -1,5 +1,5 @@
 import Foundation
-@testable import AppIntentsMigrator
+@testable import app_intents_migrator
 
 /// Creates a throwaway project directory from `files`, keyed by relative path.
 ///

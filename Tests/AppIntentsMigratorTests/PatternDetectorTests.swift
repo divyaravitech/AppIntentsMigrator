@@ -1,5 +1,5 @@
 import Testing
-@testable import AppIntentsMigrator
+@testable import app_intents_migrator
 
 @Suite("Pattern detection")
 struct PatternDetectorTests {
