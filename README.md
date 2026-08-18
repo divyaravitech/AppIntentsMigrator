@@ -175,14 +175,13 @@ swift build -c release
 
 The binary is at `.build/release/app-intents-migrator`.
 
-Or with Homebrew:
+A Homebrew formula is ready in [`Formula/app-intents-migrator.rb`](Formula/app-intents-migrator.rb)
+but is **not published yet** — it needs a `homebrew-tap` repository and the release
+tarball's SHA. Once that exists, installation becomes:
 
 ```bash
 brew install divyaravitech/tap/app-intents-migrator
 ```
-
-The formula lives in [`Formula/app-intents-migrator.rb`](Formula/app-intents-migrator.rb);
-publishing it requires a `homebrew-tap` repository and the release tarball's SHA.
 
 ## Usage
 
