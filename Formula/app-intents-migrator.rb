@@ -5,7 +5,7 @@ class AppIntentsMigrator < Formula
   # Recompute with Scripts/update-formula-sha.sh once the repository is public —
   # the release tarball 404s while it is private, and a naive curl|shasum will
   # silently hash the error page.
-  sha256 "PENDING_PUBLIC_RELEASE"
+  sha256 "4a00e12b8d06c544814897a7719859bd647ceef48ddd499afebb77e96948220c"
   license "MIT"
   head "https://github.com/divyaravitech/AppIntentsMigrator.git", branch: "main"
 
