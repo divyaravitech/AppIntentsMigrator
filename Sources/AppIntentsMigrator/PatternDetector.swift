@@ -58,7 +58,7 @@ struct PatternDetector: Sendable {
         rule(.otherSiriKit, .predictionEligibility, #"\bisEligibleForPrediction\b"#),
         rule(.otherSiriKit, .infoPlistIntents, #"\b(?:IntentsSupported|IntentsRestrictedWhileLocked|INIntentsSupported)\b"#),
         rule(
-            .otherSiriKit,
+            .privacy,
             .trackingAuthorization,
             #"\b(?:ATTrackingManager|requestTrackingAuthorization|NSUserTrackingUsageDescription|AppTrackingTransparency)\b"#
         ),

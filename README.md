@@ -24,11 +24,12 @@ Find all SiriKit patterns in your codebase:
 
 ```bash
 $ app-intents-migrator scan ~/MyProject
-SiriKit Patterns Found:
+Migration Patterns Found:
   - INExtension subclasses: 3
   - INIntent subclasses: 5
   - Delegate methods: 4
   - Other SiriKit patterns: 6
+  - Privacy / tracking declarations: 0
 
   Total patterns: 18
   Files affected: 8

@@ -696,7 +696,7 @@ enum CommonPatterns {
         (.trackingAuthorization, MigrationPattern(
             id: "privacy-manifest",
             title: "App tracking / privacy usage → PrivacyInfo.xcprivacy declarations",
-            patternType: .otherSiriKit,
+            patternType: .privacy,
             beforeCode: #"""
             import AppTrackingTransparency
 

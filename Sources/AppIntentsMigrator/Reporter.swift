@@ -18,7 +18,7 @@ enum Reporter {
     static func formatConsoleReport(result: ScanResult) -> String {
         var lines: [String] = []
 
-        lines.append("SiriKit Patterns Found:")
+        lines.append("Migration Patterns Found:")
         let counts = result.countsByType
         for type in PatternType.allCases {
             lines.append("  - \(type.displayLabel): \(counts[type] ?? 0)")
@@ -30,7 +30,7 @@ enum Reporter {
 
         if result.patterns.isEmpty {
             lines.append("")
-            lines.append("No SiriKit patterns found in \(result.root).")
+            lines.append("No migration patterns found in \(result.root).")
         } else {
             let typeWidth = PatternType.allCases.map(\.rawValue.count).max() ?? 0
             lines.append("")
@@ -86,7 +86,8 @@ enum Reporter {
             let path = absolutePath(of: pattern.file, root: result.root)
             let migration = CommonPatterns.byRule[pattern.rule]
             let advice = migration.map { " → \($0.title) [\($0.complexity.displayLabel)]" } ?? ""
-            return "\(path):\(pattern.line): \(severity.rawValue): SiriKit: \(pattern.rule.rawValue)\(advice)"
+            let subject = pattern.patternType == .privacy ? "Privacy" : "SiriKit"
+            return "\(path):\(pattern.line): \(severity.rawValue): \(subject): \(pattern.rule.rawValue)\(advice)"
         }
         .joined(separator: "\n")
     }

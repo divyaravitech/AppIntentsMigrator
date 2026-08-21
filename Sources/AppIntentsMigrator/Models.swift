@@ -13,6 +13,9 @@ enum PatternType: String, Codable, CaseIterable, Sendable {
     case delegateMethod = "DelegateMethod"
     /// Any other Intents / IntentsUI framework usage.
     case otherSiriKit = "OtherSiriKit"
+    /// Not SiriKit: privacy and tracking declarations that an App Intents migration
+    /// touches, because intents expose data to Siri and Spotlight.
+    case privacy = "Privacy"
 
     /// Label used in the console summary.
     var displayLabel: String {
@@ -21,6 +24,7 @@ enum PatternType: String, Codable, CaseIterable, Sendable {
         case .inIntent: return "INIntent subclasses"
         case .delegateMethod: return "Delegate methods"
         case .otherSiriKit: return "Other SiriKit patterns"
+        case .privacy: return "Privacy / tracking declarations"
         }
     }
 }
