@@ -53,6 +53,17 @@ jobs:
       - name: Package plugin runs
         run: swift package app-intents-scan | grep -q 'Total patterns:'
 
+      # The migrated example is the tool's own advice, written out in full. If it stops
+      # compiling, the guidance in CommonPatterns has drifted from the real framework.
+      - name: Recommended App Intents code compiles
+        run: xcrun swiftc -typecheck -target arm64-apple-macos14 Examples/MigratedAppIntentsApp/*.swift
+
+      # And the scanner must find nothing left to migrate in it.
+      - name: Migrated example is clean
+        run: |
+          swift run app-intents-migrator scan Examples/MigratedAppIntentsApp --no-json | tee /tmp/migrated.txt
+          grep -q "Total patterns: 0" /tmp/migrated.txt
+
   strict-concurrency:
     name: Strict concurrency
     runs-on: macos-15

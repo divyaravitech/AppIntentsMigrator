@@ -1,21 +1,30 @@
 # AppIntentsMigrator
 
-A Swift CLI tool to scan and migrate SiriKit code to App Intents (iOS 27).
+A Swift CLI tool to scan and migrate SiriKit code to App Intents.
 
 <img src="docs/demo.svg" alt="Scanning a SiriKit project and previewing a patch" width="700">
 
 ## The Problem
 
-SiriKit received a formal deprecation notice at WWDC 2026, and App Intents is now the only
-way into the rebuilt Siri. iOS 27 ships September 14, 2026.
+App Intents is the framework Apple documents for reaching Siri, Spotlight, Shortcuts and
+Apple Intelligence. Apple's own guidance is explicit that Apple Intelligence
+["uses the app intents, app entities, and app enums you define"](https://developer.apple.com/documentation/appintents/apple-intelligence-and-siri-ai)
+to understand your app. SiriKit is not part of that path.
 
-The failure mode is insidious rather than loud. SiriKit code still **compiles** under iOS 27
-— you get deprecation warnings, not build errors — so it passes CI and ships. It simply
-stops surfacing in Siri. Your integration goes **silently invisible** while looking healthy.
+The failure mode is quiet. SiriKit code keeps compiling and keeps passing CI, so nothing
+tells you it is falling behind — it simply isn't what the newer Siri surfaces are built on.
+An app whose only integration is an `INExtension` gets none of the App Shortcuts, Spotlight
+or Apple Intelligence behaviour that App Intents unlocks.
 
-Reporting on the deprecation describes a window of roughly two to three years before SiriKit
-loses voice-assistant functionality outright, so this is a migration to plan, not to panic
-over. The Siri visibility cliff, however, arrives with iOS 27.
+This tool finds that code and tells you what to replace it with.
+
+> **On the "SiriKit is deprecated" reporting.** Widely circulated articles describe a formal
+> SiriKit deprecation at WWDC 2026 and an iOS 27 cut-off. As of 18 August 2026 that is **not
+> reflected in Apple's documentation**: querying Apple's documentation API returns
+> `deprecated=false` for `INExtension`, `INIntent` and `INPreferences`, and the SiriKit
+> framework page carries no deprecation notice. Treat the deadline framing with caution and
+> verify against Apple's release notes before planning around a date. The case for migrating
+> does not depend on it — App Intents is where the capability is, deprecation or not.
 
 ## What It Does
 
@@ -139,6 +148,21 @@ swift run app-intents-migrator scan Examples/LegacySiriKitApp
 
 See [`Examples/LegacySiriKitApp/README.md`](Examples/LegacySiriKitApp/README.md) for what
 each file demonstrates.
+
+### The same app, migrated
+
+[`Examples/MigratedAppIntentsApp`](Examples/MigratedAppIntentsApp) is what the guidance
+actually produces — `SendMessage`, `OrderCoffee` with an `AppEnum`, an
+`AppShortcutsProvider` and an `IntentDonationManager` donation.
+
+It is not illustrative prose. CI **typechecks it against the real AppIntents framework**
+and asserts the scanner finds **zero** patterns in it, so the advice in `CommonPatterns`
+cannot quietly drift away from code that compiles:
+
+```bash
+xcrun swiftc -typecheck -target arm64-apple-macos14 Examples/MigratedAppIntentsApp/*.swift
+swift run app-intents-migrator scan Examples/MigratedAppIntentsApp   # Total patterns: 0
+```
 
 ## Xcode integration
 
@@ -308,4 +332,4 @@ GitHub: [@divyaravitech](https://github.com/divyaravitech)
 
 ---
 
-**iOS 27 ships September 14, 2026. SiriKit will still compile — it just won't answer.**
+**SiriKit still compiles. That's exactly why it's easy to miss.**
