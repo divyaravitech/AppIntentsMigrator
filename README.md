@@ -19,8 +19,8 @@ or Apple Intelligence behaviour that App Intents unlocks.
 This tool finds that code and tells you what to replace it with.
 
 > **On the "SiriKit is deprecated" reporting.** Widely circulated articles describe a formal
-> SiriKit deprecation at WWDC 2026 and an iOS 27 cut-off. As of 18 August 2026 that is **not
-> reflected in Apple's documentation**: querying Apple's documentation API returns
+> SiriKit deprecation at WWDC 2026 and an iOS 27 cut-off. As of 7 October 2026 — three weeks after iOS 27 shipped — that is
+> **still not reflected in Apple's documentation**: querying Apple's documentation API returns
 > `deprecated=false` for `INExtension`, `INIntent` and `INPreferences`, and the SiriKit
 > framework page carries no deprecation notice. Treat the deadline framing with caution and
 > verify against Apple's release notes before planning around a date. The case for migrating
@@ -312,8 +312,8 @@ Each with an Apple documentation link checked against Apple's documentation API.
 swift test
 ```
 
-35 tests covering the detector (comments, string literals, wrapped signatures, property
-lists), the migration library's coverage invariants, the patching safety guards, backup
+44 tests covering the detector (comments, string literals, interpolation, CRLF and CR line endings,
+wrapped signatures, property lists), the migration library's coverage invariants, the patching safety guards, backup
 round-trips, and exclusion globs.
 
 ## Requirements

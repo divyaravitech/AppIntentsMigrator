@@ -81,8 +81,8 @@ struct PatternDetector: Sendable {
         var openDepth = 0
         var rulesInDeclaration: Set<RuleID> = []
 
-        for (index, rawLine) in source.split(separator: "\n", omittingEmptySubsequences: false).enumerated() {
-            let line = String(rawLine).trimmingCharacters(in: CharacterSet(charactersIn: "\r"))
+        for (index, sourceLine) in SourceLines.split(source).enumerated() {
+            let line = sourceLine.text
             let code = Self.codeOnly(from: line, state: &lexer)
             guard !code.trimmingCharacters(in: .whitespaces).isEmpty else { continue }
 
@@ -146,8 +146,8 @@ struct PatternDetector: Sendable {
         var patterns: [DetectedPattern] = []
         var insideComment = false
 
-        for (index, rawLine) in source.split(separator: "\n", omittingEmptySubsequences: false).enumerated() {
-            let line = String(rawLine).trimmingCharacters(in: CharacterSet(charactersIn: "\r"))
+        for (index, sourceLine) in SourceLines.split(source).enumerated() {
+            let line = sourceLine.text
             let code = Self.strippingXMLComments(from: line, insideComment: &insideComment)
             guard !code.trimmingCharacters(in: .whitespaces).isEmpty else { continue }
 
@@ -305,6 +305,13 @@ struct PatternDetector: Sendable {
         while index < characters.count {
             // Escapes only apply in non-raw strings; in raw strings the escape is `\#…`.
             if characters[index] == "\\", hashes == 0 {
+                // `\(` opens an interpolation, which is an expression and may itself contain
+                // string literals. Skipping to its matching `)` stops an inner quote from
+                // being mistaken for the end of the outer string.
+                if index + 1 < characters.count, characters[index + 1] == "(" {
+                    index = endOfInterpolation(characters, openParen: index + 1)
+                    continue
+                }
                 index += 2
                 continue
             }
@@ -315,6 +322,33 @@ struct PatternDetector: Sendable {
                     closingHashes += 1
                 }
                 if closingHashes >= hashes { return index + 1 + hashes }
+            }
+            index += 1
+        }
+
+        return characters.count
+    }
+
+    /// Index just past the `)` closing an interpolation that starts at `openParen`.
+    ///
+    /// Counts nesting and steps over string literals inside the expression, so
+    /// `\(items.map { "\($0)" })` is consumed whole.
+    private static func endOfInterpolation(_ characters: [Character], openParen: Int) -> Int {
+        var index = openParen
+        var depth = 0
+
+        while index < characters.count {
+            switch characters[index] {
+            case "(":
+                depth += 1
+            case ")":
+                depth -= 1
+                if depth == 0 { return index + 1 }
+            case "\"":
+                index = endOfSingleLineString(characters, openingQuote: index, hashes: 0)
+                continue
+            default:
+                break
             }
             index += 1
         }

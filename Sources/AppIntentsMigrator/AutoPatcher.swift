@@ -234,7 +234,9 @@ actor AutoPatcher {
         suggestions: [MigrationSuggestion],
         allowImportSwap: Bool
     ) -> Plan {
-        var lines = contents.components(separatedBy: "\n")
+        // Keeps each line's own terminator, so editing one line in a CRLF file does not
+        // rewrite the rest of it to LF and turn a one-line fix into a whole-file diff.
+        var lines = SourceLines.split(contents)
         var edits: [PatchEdit] = []
         var skipped: [String] = []
         var deletedLines = Set<Int>()
@@ -247,17 +249,17 @@ actor AutoPatcher {
             if !allowImportSwap, suggestion.pattern.rule == .intentsImport { continue }
 
             let candidates = PatchingRules.rules(for: suggestion.pattern, allowingProposals: allowProposals)
-            guard let rule = candidates.first(where: { PatchingRules.apply($0, to: lines[index]).matched }) else {
+            guard let rule = candidates.first(where: { PatchingRules.apply($0, to: lines[index].text).matched }) else {
                 skipped.append(skipReason(for: suggestion))
                 continue
             }
 
-            let outcome = PatchingRules.apply(rule, to: lines[index])
+            let outcome = PatchingRules.apply(rule, to: lines[index].text)
             edits.append(
                 PatchEdit(
                     file: displayPath,
                     line: lineNumber,
-                    before: lines[index],
+                    before: lines[index].text,
                     after: outcome.replacement,
                     rule: suggestion.pattern.rule,
                     patchRuleID: rule.id,
@@ -266,7 +268,7 @@ actor AutoPatcher {
             )
 
             if let replacement = outcome.replacement {
-                lines[index] = replacement
+                lines[index].text = replacement
             } else {
                 deletedLines.insert(lineNumber)
             }
@@ -275,7 +277,7 @@ actor AutoPatcher {
         // `import Intents` and `import IntentsUI` both become `import AppIntents`; drop the
         // duplicate rather than leaving the same import twice.
         var seenAppIntentsImport = false
-        for (index, line) in lines.enumerated() where line.trimmingCharacters(in: .whitespaces) == "import AppIntents" {
+        for (index, line) in lines.enumerated() where line.text.trimmingCharacters(in: .whitespaces) == "import AppIntents" {
             let lineNumber = index + 1
             guard !deletedLines.contains(lineNumber) else { continue }
             if seenAppIntentsImport {
@@ -283,7 +285,7 @@ actor AutoPatcher {
                     PatchEdit(
                         file: displayPath,
                         line: lineNumber,
-                        before: line,
+                        before: line.text,
                         after: nil,
                         rule: .intentsImport,
                         patchRuleID: "dedupe-appintents-import",
@@ -300,7 +302,7 @@ actor AutoPatcher {
             .map(\.element)
 
         return Plan(
-            patched: remaining.joined(separator: "\n"),
+            patched: SourceLines.join(remaining),
             edits: edits.sorted { $0.line < $1.line },
             skipped: skipped
         )

@@ -73,10 +73,33 @@ actor SyntaxValidator: SourceValidating {
         return ValidationResult(file: path, errors: parseDiagnostics(outcome.output, defaultFile: path))
     }
 
+    /// Beyond this many bytes of paths, arguments go in a response file instead of argv.
+    /// ARG_MAX is 1 MB on macOS; a large monorepo would otherwise fail with a bare
+    /// "argument list too long" that says nothing about what to do.
+    private static let inlineArgumentLimit = 128_000
+
     private nonisolated static func runCompiler(on paths: [String], mode: Mode) throws -> Subprocess.Outcome {
+        let inlineSize = paths.reduce(0) { $0 + $1.utf8.count + 1 }
+        var responseFile: URL?
+        let arguments: [String]
+
+        if inlineSize > inlineArgumentLimit {
+            // One invocation is kept deliberately: under -typecheck the files are compiled
+            // together, and splitting them would silently lose cross-file checking.
+            let url = URL(fileURLWithPath: NSTemporaryDirectory())
+                .appendingPathComponent("appintents-swiftc-\(UUID().uuidString).resp")
+            let quoted = paths.map { "\"\($0)\"" }.joined(separator: "\n")
+            try? Data("-\(mode.rawValue)\n\(quoted)\n".utf8).write(to: url, options: .atomic)
+            responseFile = url
+            arguments = ["swiftc", "@\(url.path)"]
+        } else {
+            arguments = ["swiftc", "-\(mode.rawValue)"] + paths
+        }
+        defer { if let responseFile { try? FileManager.default.removeItem(at: responseFile) } }
+
         let outcome: Subprocess.Outcome
         do {
-            outcome = try Subprocess.run("/usr/bin/xcrun", ["swiftc", "-\(mode.rawValue)"] + paths)
+            outcome = try Subprocess.run("/usr/bin/xcrun", arguments)
         } catch let failure as Subprocess.Failure {
             // A compiler we cannot launch is a tooling problem, not invalid code. Reporting
             // it as a backup failure (as the shared helper used to) actively misled.
