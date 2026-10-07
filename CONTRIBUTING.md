@@ -1,8 +1,8 @@
 # Contributing
 
-The most useful thing you can file is a real SiriKit pattern this gets wrong. Detection is
-regex-based and line-oriented, so unusual code shapes are where it fails. A three-line
-snippet is enough.
+The most useful thing you can file is a real SiriKit pattern this gets wrong. Comments and
+string literals are removed with swift-syntax, but the rules themselves match per line, so
+unusual code shapes are where it fails. A three-line snippet is enough.
 
 ## Setup
 

@@ -65,7 +65,7 @@ struct PatternDetector: Sendable {
     /// Scans `source` and returns every pattern found, ordered by line number.
     func detect(in source: String, file: String) -> [DetectedPattern] {
         var patterns: [DetectedPattern] = []
-        var lexer = LexerState()
+        let stripped = SourceLines.split(SwiftCode.strippingCommentsAndLiterals(from: source))
 
         // A declaration wrapped across lines is one site, not several. Only parentheses and
         var openDepth = 0
@@ -73,7 +73,7 @@ struct PatternDetector: Sendable {
 
         for (index, sourceLine) in SourceLines.split(source).enumerated() {
             let line = sourceLine.text
-            let code = Self.codeOnly(from: line, state: &lexer)
+            let code = index < stripped.count ? stripped[index].text : ""
             guard !code.trimmingCharacters(in: .whitespaces).isEmpty else { continue }
 
             let isContinuation = openDepth > 0
@@ -185,149 +185,7 @@ struct PatternDetector: Sendable {
         return nil
     }
 
-    /// Lexer position carried from one line to the next.
-    struct LexerState {
-        var blockCommentDepth = 0
-        /// Number of `#` delimiters when inside a multi-line string literal; `nil` in code.
-        var multilineStringHashes: Int?
-    }
-
-    /// Strips comments and string literals, leaving only executable code.
-    /// Handles nested block comments, raw and multi-line strings, and interpolation.
-    static func codeOnly(from line: String, state: inout LexerState) -> String {
-        let characters = Array(line)
-        var result = ""
-        var index = 0
-
-        func matches(_ token: String, at position: Int) -> Bool {
-            let token = Array(token)
-            guard position + token.count <= characters.count else { return false }
-            return Array(characters[position..<(position + token.count)]) == token
-        }
-
-        /// Number of consecutive `#` starting at `position`.
-        func hashRun(at position: Int) -> Int {
-            var count = 0
-            while position + count < characters.count, characters[position + count] == "#" { count += 1 }
-            return count
-        }
-
-        /// True when a multi-line literal closes here: `"""` followed by exactly `hashes` `#`.
-        func closesMultiline(at position: Int, hashes: Int) -> Bool {
-            guard matches("\"\"\"", at: position) else { return false }
-            return hashRun(at: position + 3) >= hashes
-        }
-
-        while index < characters.count {
-            // Inside a multi-line string: consume until the matching delimiter.
-            if let hashes = state.multilineStringHashes {
-                if closesMultiline(at: index, hashes: hashes) {
-                    state.multilineStringHashes = nil
-                    index += 3 + hashes
-                } else {
-                    index += 1
-                }
-                continue
-            }
-
-            if state.blockCommentDepth > 0 {
-                if matches("*/", at: index) {
-                    state.blockCommentDepth -= 1
-                    index += 2
-                } else if matches("/*", at: index) {
-                    state.blockCommentDepth += 1
-                    index += 2
-                } else {
-                    index += 1
-                }
-                continue
-            }
-
-            if matches("//", at: index) { break }
-            if matches("/*", at: index) {
-                state.blockCommentDepth += 1
-                index += 2
-                continue
-            }
-
-            // A string literal opens with optional `#`s then a quote.
-            let hashes = hashRun(at: index)
-            let quoteIndex = index + hashes
-            if quoteIndex < characters.count, characters[quoteIndex] == "\"" {
-                if matches("\"\"\"", at: quoteIndex) {
-                    state.multilineStringHashes = hashes
-                    index = quoteIndex + 3
-                } else {
-                    index = endOfSingleLineString(characters, openingQuote: quoteIndex, hashes: hashes)
-                }
-                continue
-            }
-
-            result.append(characters[index])
-            index += 1
-        }
-
-        return result
-    }
-
-    /// Index just past the closing quote of a single-line string, or the end of the line
-    /// when the literal is unterminated.
-    private static func endOfSingleLineString(_ characters: [Character], openingQuote: Int, hashes: Int) -> Int {
-        var index = openingQuote + 1
-
-        while index < characters.count {
-            // Escapes only apply in non-raw strings; in raw strings the escape is `\#…`.
-            if characters[index] == "\\", hashes == 0 {
-                // `\(` opens an interpolation, which is an expression and may itself contain
-                // string literals. Skipping to its matching `)` stops an inner quote from
-                // being mistaken for the end of the outer string.
-                if index + 1 < characters.count, characters[index + 1] == "(" {
-                    index = endOfInterpolation(characters, openParen: index + 1)
-                    continue
-                }
-                index += 2
-                continue
-            }
-            if characters[index] == "\"" {
-                var closingHashes = 0
-                while index + 1 + closingHashes < characters.count,
-                      characters[index + 1 + closingHashes] == "#" {
-                    closingHashes += 1
-                }
-                if closingHashes >= hashes { return index + 1 + hashes }
-            }
-            index += 1
-        }
-
-        return characters.count
-    }
-
-    /// Index just past the `)` closing an interpolation that starts at `openParen`.
-    private static func endOfInterpolation(_ characters: [Character], openParen: Int) -> Int {
-        var index = openParen
-        var depth = 0
-
-        while index < characters.count {
-            switch characters[index] {
-            case "(":
-                depth += 1
-            case ")":
-                depth -= 1
-                if depth == 0 { return index + 1 }
-            case "\"":
-                index = endOfSingleLineString(characters, openingQuote: index, hashes: 0)
-                continue
-            default:
-                break
-            }
-            index += 1
-        }
-
-        return characters.count
-    }
-
     /// Patterns are compile-time constants, so a bad one is a programming error.
-    /// so a failure here is a programming error rather than a runtime condition.
     private static func rule(_ type: PatternType, _ id: RuleID, _ pattern: String) -> Rule {
         // swiftlint:disable:next force_try
         Rule(type: type, id: id, regex: try! NSRegularExpression(pattern: pattern))

@@ -55,8 +55,8 @@ Migration Patterns Found:
 ```
 
 Reads `.swift` files for SiriKit calls and `Info.plist` for SiriKit declarations
-(`IntentsSupported`, `NSSiriUsageDescription`, the intents extension point). Comments and
-string literals are ignored.
+(`IntentsSupported`, `NSSiriUsageDescription`, the intents extension point). Files are
+parsed with swift-syntax first, so comments and string literals are never matched.
 
 | Option | |
 | --- | --- |
@@ -173,14 +173,14 @@ re-enabled Handoff.
 swift test
 ```
 
-44 tests over the detector (comments, string literals, interpolation, CRLF/CR line endings,
-wrapped signatures, property lists), the migration library, the patching guards, backup
-round-trips and exclusion globs.
+46 tests over the detector (comments, string and regex literals, interpolation, CRLF/CR
+line endings, wrapped signatures, property lists), the migration library, the patching
+guards, backup round-trips and exclusion globs.
 
 ## Contributing
 
 See [CONTRIBUTING.md](CONTRIBUTING.md). The most useful thing to report is a real SiriKit
-pattern this gets wrong. Detection is regex-based, so unusual code shapes are where it
+pattern this gets wrong. Rules are matched per line, so unusual code shapes are where it
 fails.
 
 ## License
