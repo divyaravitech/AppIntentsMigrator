@@ -2,7 +2,7 @@ import Foundation
 
 /// How much work a migration needs.
 enum Complexity: String, Codable, CaseIterable, Sendable {
-    /// A mechanical, single-site edit that a tool could apply safely — an import swap,
+    /// A line-local edit that preserves semantics.
     /// or deleting a call that has no replacement.
     case autoPatchable = "AutoPatchable"
     /// A structural change that depends on the surrounding code: new types, new
@@ -18,7 +18,6 @@ enum Complexity: String, Codable, CaseIterable, Sendable {
 }
 
 /// One SiriKit → App Intents migration recipe.
-///
 /// Owned by `CommonPatterns`, which is the single source of truth for all advice.
 struct MigrationPattern: Codable, Equatable, Sendable {
     /// Stable identifier, used to group suggestions in reports.

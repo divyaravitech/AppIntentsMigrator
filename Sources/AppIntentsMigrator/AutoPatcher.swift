@@ -1,16 +1,6 @@
 import Foundation
 
-/// Applies safe SiriKit → App Intents rewrites, with a backup and a validation gate.
-///
-/// Safety model, in order:
-/// 1. `patchProject` archives every Swift file before writing anything.
-/// 2. A file is only written if its patched contents still parse — validation happens on a
-///    temporary copy first, so an invalid patch is never committed to the working tree.
-/// 3. After all writes, the patched set is validated again; any failure restores the backup.
-/// 4. Structural rewrites are excluded unless the caller opts in via `allowProposals`.
-///
-/// The actor serialises patching, so concurrent callers cannot interleave writes to the
-/// same file.
+/// Applies safe rewrites behind a backup, a pre-write validation gate, and rollback.
 actor AutoPatcher {
 
     enum Mode: String, Sendable {
@@ -41,15 +31,6 @@ actor AutoPatcher {
     // MARK: - Single file
 
     /// Patches one file using the suggestions that apply to it.
-    ///
-    /// The file is written only in `.apply` mode and only when the patched text validates.
-    /// This method does not take a backup — `patchProject` does that once for the whole
-    /// project. Calling it directly cannot corrupt a file (an invalid result is discarded),
-    /// but it also cannot restore a previous version.
-    ///
-    /// - Parameters:
-    ///   - file: Absolute path to the Swift file.
-    ///   - suggestions: Suggestions whose `pattern.line` refers to this file.
     func patchFile(_ file: String, using suggestions: [MigrationSuggestion]) async throws -> PatchResult {
         let url = URL(fileURLWithPath: file)
 
@@ -78,9 +59,6 @@ actor AutoPatcher {
         var plan = plan(for: original, displayPath: displayPath, suggestions: suggestions, allowImportSwap: true)
 
         // Swapping `import Intents` for `import AppIntents` is only safe once nothing in the
-        // file still needs the old module. Re-scan the patched text: if SiriKit symbols
-        // remain, keep the original import and leave the swap for after those are migrated.
-        // `swiftc -parse` cannot catch this — an unresolved symbol still parses.
         if plan.swapsImport, residualSiriKitUsage(in: plan.patched, file: displayPath) {
             plan = self.plan(for: original, displayPath: displayPath, suggestions: suggestions, allowImportSwap: false)
             plan.skipped.append(
@@ -122,9 +100,6 @@ actor AutoPatcher {
     // MARK: - Whole project
 
     /// Patches every file with suggestions, backing the project up first.
-    ///
-    /// - Throws: `PatchError.backupFailed` before any write if the archive cannot be made;
-    ///   `PatchError.rollbackFailed` if a restore is needed but does not succeed.
     func patchProject(
         root: String,
         suggestions: [MigrationSuggestion]
@@ -219,7 +194,7 @@ actor AutoPatcher {
         }
     }
 
-    /// True when the patched text still references SiriKit outside comments and strings,
+    /// True when the patched text still references SiriKit outside comments and strings.
     /// meaning it continues to depend on the Intents module.
     private func residualSiriKitUsage(in patched: String, file: String) -> Bool {
         PatternDetector()

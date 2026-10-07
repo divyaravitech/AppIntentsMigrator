@@ -1,14 +1,13 @@
 import Foundation
 
 /// The kind of legacy SiriKit construct a `DetectedPattern` refers to.
-///
 /// Raw values are the names used in the JSON report.
 enum PatternType: String, Codable, CaseIterable, Sendable {
     /// A declaration or reference involving `INExtension`, the SiriKit extension entry point.
     case inExtension = "INExtension"
     /// An `INIntent` subclass, an `IN…IntentHandling` conformance, or an intent type reference.
     case inIntent = "INIntent"
-    /// A legacy delegate/handler entry point (`handler(for:)`, `handle(intent:)`,
+    /// A legacy delegate or handler entry point.
     /// `application(_:didFinishLaunchingWithOptions:)`, …).
     case delegateMethod = "DelegateMethod"
     /// Any other Intents / IntentsUI framework usage.
@@ -30,10 +29,6 @@ enum PatternType: String, Codable, CaseIterable, Sendable {
 }
 
 /// Identifies the specific detection rule that produced a finding.
-///
-/// Shared between `PatternDetector` (which owns the regexes) and `CommonPatterns`
-/// (which owns the migration advice), so every rule is guaranteed to have a
-/// migration mapped to it. Raw values are the human-readable rule names.
 enum RuleID: String, Codable, CaseIterable, Sendable {
     // INExtension
     case inExtensionSubclass = "INExtension subclass"
@@ -171,7 +166,7 @@ struct PatchResult: Codable, Equatable, Sendable {
     let linesChanged: Int
     /// Human-readable reasons for findings that were not patched.
     let skipped: [String]
-    /// True when every patched file passed syntax validation. False means the
+    /// False means the changes were rolled back, or nothing was written.
     /// changes were rolled back (or, in a dry run, that nothing was written).
     let validated: Bool
     /// Every change made or proposed, for reporting.

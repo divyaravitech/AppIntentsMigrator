@@ -58,7 +58,6 @@ enum Reporter {
     }
 
     /// Writes the full result as pretty-printed JSON, creating intermediate directories as needed.
-    ///
     /// - Throws: `ReportError.cannotWriteReport` when the destination cannot be created or written.
     static func generateJSONReport(result: ScanResult, outputPath: String) throws {
         try writeJSON(result, to: outputPath)
@@ -75,12 +74,6 @@ enum Reporter {
     }
 
     /// Emits findings in the compiler diagnostic format Xcode parses.
-    ///
-    /// `<absolute path>:<line>: warning: <message>` on stdout of a Run Script build phase
-    /// becomes an inline warning on the offending line, so a SiriKit call is flagged where
-    /// the developer is already looking rather than in a separate report.
-    ///
-    /// Paths must be absolute for Xcode to resolve them back to a file.
     static func formatXcodeDiagnostics(result: ScanResult, severity: Severity = .warning) -> String {
         result.patterns.map { pattern in
             let path = absolutePath(of: pattern.file, root: result.root)

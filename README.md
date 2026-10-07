@@ -1,38 +1,47 @@
 # AppIntentsMigrator
 
-A Swift CLI tool to scan and migrate SiriKit code to App Intents.
+Finds SiriKit code in a Swift project and shows the App Intents replacement for it.
 
-<img src="docs/demo.svg" alt="Scanning a SiriKit project and previewing a patch" width="700">
+<img src="docs/demo.svg" alt="Scanning a project and previewing a patch" width="700">
 
-## The Problem
+## Why
 
-App Intents is the framework Apple documents for reaching Siri, Spotlight, Shortcuts and
-Apple Intelligence. Apple's own guidance is explicit that Apple Intelligence
-["uses the app intents, app entities, and app enums you define"](https://developer.apple.com/documentation/appintents/apple-intelligence-and-siri-ai)
-to understand your app. SiriKit is not part of that path.
+App Intents is the framework Apple documents for Siri, Spotlight, Shortcuts and Apple
+Intelligence. SiriKit isn't part of that path, so an app whose only integration is an
+`INExtension` doesn't get App Shortcuts, Spotlight results or Apple Intelligence support.
 
-The failure mode is quiet. SiriKit code keeps compiling and keeps passing CI, so nothing
-tells you it is falling behind — it simply isn't what the newer Siri surfaces are built on.
-An app whose only integration is an `INExtension` gets none of the App Shortcuts, Spotlight
-or Apple Intelligence behaviour that App Intents unlocks.
+Nothing breaks when you ignore this. SiriKit still compiles and your tests still pass, so
+there's no signal that anything is wrong.
 
-This tool finds that code and tells you what to replace it with.
+> **On the reports that SiriKit was deprecated at WWDC 2026:** as of 7 October 2026, three
+> weeks after iOS 27 shipped, Apple's documentation API still returns `deprecated=false` for
+> `INExtension`, `INIntent`, `INPreferences` and `INInteraction`, and the SiriKit framework
+> page has no deprecation notice. Check Apple's release notes before planning around a date.
 
-> **On the "SiriKit is deprecated" reporting.** Widely circulated articles describe a formal
-> SiriKit deprecation at WWDC 2026 and an iOS 27 cut-off. As of 7 October 2026 — three weeks after iOS 27 shipped — that is
-> **still not reflected in Apple's documentation**: querying Apple's documentation API returns
-> `deprecated=false` for `INExtension`, `INIntent` and `INPreferences`, and the SiriKit
-> framework page carries no deprecation notice. Treat the deadline framing with caution and
-> verify against Apple's release notes before planning around a date. The case for migrating
-> does not depend on it — App Intents is where the capability is, deprecation or not.
-
-## What It Does
-
-### Scan
-Find all SiriKit patterns in your codebase:
+## Install
 
 ```bash
-$ app-intents-migrator scan ~/MyProject
+brew install divyaravitech/tap/app-intents-migrator
+```
+
+Or build it:
+
+```bash
+git clone https://github.com/divyaravitech/AppIntentsMigrator.git
+cd AppIntentsMigrator && swift build -c release
+```
+
+Needs Swift 5.9+ and macOS 13+. The binary ends up at `.build/release/app-intents-migrator`.
+
+## Usage
+
+### scan
+
+```bash
+app-intents-migrator scan ~/MyApp
+```
+
+```
 Migration Patterns Found:
   - INExtension subclasses: 3
   - INIntent subclasses: 5
@@ -43,268 +52,120 @@ Migration Patterns Found:
   Total patterns: 18
   Files affected: 8
   Files scanned:  42
-  Report saved: migration_report.json
 ```
 
-Swift sources are scanned for SiriKit *calls*; `Info.plist` files are scanned for SiriKit *declarations* (`IntentsSupported`, `NSSiriUsageDescription`, the intents extension point). Comments and string literals are ignored, so commented-out code and code samples inside strings are never reported.
+Reads `.swift` files for SiriKit calls and `Info.plist` for SiriKit declarations
+(`IntentsSupported`, `NSSiriUsageDescription`, the intents extension point). Comments and
+string literals are ignored.
 
-### Suggest
-Get before/after code for each pattern:
+| Option | |
+| --- | --- |
+| `--json <path>` | JSON report location (default `migration_report.json`) |
+| `--no-json` | Console only |
+| `--xcode` | Emit Xcode diagnostics (see below) |
+| `--warnings-as-errors` | With `--xcode`, fail the build |
+| `--exclude <glob>` | Skip paths. Repeatable |
+
+### suggest
 
 ```bash
-$ app-intents-migrator suggest ~/MyProject
-[1/14]  INExtension class → AppIntent struct
-------------------------------------------------------------------------------
-Pattern:     INExtension — INExtension subclass
-Complexity:  Manual review
-Apple docs:  https://developer.apple.com/documentation/appintents/appintent
-Occurrences: 2
-  • IntentExtension/IntentHandler.swift:4  class IntentHandler: INExtension {
-
--- BEFORE (SiriKit) ----------------------------------------------------------
-    class IntentHandler: INExtension {
-        override func handler(for intent: INIntent) -> Any? {
-            guard intent is INSendMessageIntent else { return nil }
-            return SendMessageIntentHandler()
-        }
-    }
-
--- AFTER (App Intents) -------------------------------------------------------
-    struct SendMessage: AppIntent {
-        static let title: LocalizedStringResource = "Send Message"
-
-        @Parameter(title: "Recipient") var recipient: String
-
-        func perform() async throws -> some IntentResult {
-            try await MessageService.shared.send(message, to: recipient)
-            return .result()
-        }
-    }
+app-intents-migrator suggest ~/MyApp
 ```
 
-### Patch
-Apply the migrations that can be made safely, with a backup and a validation gate:
+Prints before/after code, an explanation and an Apple docs link for each pattern found.
+22 migrations are covered.
+
+| Option | |
+| --- | --- |
+| `-o, --output <path>` | `.json` writes JSON, anything else writes the text guide |
+| `--summary` | Counts only |
+| `--exclude <glob>` | Skip paths. Repeatable |
+
+### patch
 
 ```bash
-$ app-intents-migrator patch ~/MyProject --dry-run
-App Intents Auto-Patcher — DRY RUN (nothing written)
-==============================================================================
-Files patched:  3
-Lines changed:  6
-Skipped:        13
-Validation:     passed (swiftc -parse)
-
-CHANGES THAT WOULD BE MADE
-------------------------------------------------------------------------------
-App/AppDelegate.swift:2  [auto swap-intents-import]
-  - import Intents
-  + import AppIntents
-
-App/AppDelegate.swift:7  [auto drop-siri-authorization]
-  - INPreferences.requestSiriAuthorization { status in print(status) }
-  + (line removed)
+app-intents-migrator patch ~/MyApp --dry-run
 ```
 
-**Expect it to change little.** Most of a SiriKit migration is structural — new types, re-modelled parameters, rewritten control flow — and none of that can be done safely by text substitution. Those land in `suggest`, not `patch`.
+Applies only the rewrites that are safe to make mechanically. In practice that's import
+swaps and a couple of deletions; everything structural is reported by `suggest` instead.
 
-## How patching stays safe
+| Option | |
+| --- | --- |
+| `--dry-run` | Show changes without writing |
+| `--apply` | Write changes (default) |
+| `--rollback <archive>` | Restore a backup |
+| `--validate-only` | Just check the project parses |
+| `--include-structural` | Also write structural rewrites. These need follow-up edits |
+| `--typecheck` | Validate with `swiftc -typecheck` instead of `-parse` |
+| `-o, --output <path>` | JSON patch report |
+| `--exclude <glob>` | Skip paths. Repeatable |
 
-1. **Backup first.** Every Swift file is archived to `AppIntentsMigrator.backup-YYYY-MM-DD.tar.gz` in the project root before anything is written. If the archive fails, nothing is touched.
-2. **Validate before writing.** The patched text is checked with `swiftc -parse` on a temporary copy. A file that fails never reaches your working tree.
-3. **Validate again after writing,** across the whole patched set. Any failure restores the backup automatically.
-4. **Structural rewrites are opt-in.** They are reported, not applied, unless you pass `--include-structural`.
-5. **Swift only.** The patcher refuses any file that is not `.swift`, so `Info.plist` findings are always reported for you to edit by hand.
-6. **The import swap goes last.** `import Intents` → `import AppIntents` is only applied once nothing else in that file needs the old module; otherwise it is deferred and reported. Swapping it early would leave every remaining `IN…` symbol unresolved, and a missing symbol still *parses*, so validation would not catch it.
+## How patching avoids breaking things
 
-### A caveat worth knowing
+1. Every Swift file is archived to `AppIntentsMigrator.backup-YYYY-MM-DD.tar.gz` in the
+   project root before anything is written. If that fails, nothing is touched.
+2. Patched text is checked with `swiftc` on a temp copy. A file that fails never reaches
+   your working tree.
+3. The patched set is checked again after writing. Any failure restores the backup.
+4. Structural rewrites are reported, not applied, unless you pass `--include-structural`.
+5. Non-`.swift` files are refused, so `Info.plist` findings are always yours to edit.
+6. `import Intents` is only swapped once nothing else in the file needs it. Swapping early
+   leaves the remaining `IN…` symbols unresolved, and that still parses.
 
-`swiftc -parse` is a **syntax** check. It does not catch type mismatches, missing members, or unresolved imports — a class turned into a struct with `override` members still parses cleanly. Passing validation means "still parses", not "still builds".
+`swiftc -parse` only checks syntax. It won't catch type errors or unresolved imports, so a
+passing validation means the file parses, not that the project builds. `--typecheck` is
+stricter but reports false errors for files that need the rest of the module or a non-host
+SDK. Build in Xcode after patching.
 
-`--typecheck` opts into the stricter check, but a file compiled outside its module cannot see the rest of your project, and building for the host platform makes `import UIKit` fail. On an iOS project it reports errors that are not real. Use it when applying structural rewrites, and read the failures critically.
+## Xcode
 
-**Always build in Xcode after patching.**
-
-## Validated against real projects
-
-Detection is checked against production SiriKit code, not only the bundled sample:
-
-| Project | Swift files | Findings | Files missed vs `grep` |
-| --- | --- | --- | --- |
-| [Automattic/simplenote-ios](https://github.com/Automattic/simplenote-ios) | 358 | 49 | 0 |
-| [LoopKit/Loop](https://github.com/LoopKit/Loop) | 398 | 41 | 0 |
-
-Both scan in about a second. Running against Loop is what surfaced the
-`isEligibleForHandoff` bug fixed in the prediction-flag rule.
-
-## Try it without a SiriKit project
-
-`Examples/LegacySiriKitApp` is a deliberately un-migrated SiriKit app — an Intents
-extension, generated intent classes, donations, shortcut UI and an `Info.plist`. It
-triggers all 22 detection rules.
-
-```bash
-swift run app-intents-migrator scan Examples/LegacySiriKitApp
-```
-
-See [`Examples/LegacySiriKitApp/README.md`](Examples/LegacySiriKitApp/README.md) for what
-each file demonstrates.
-
-### The same app, migrated
-
-[`Examples/MigratedAppIntentsApp`](Examples/MigratedAppIntentsApp) is what the guidance
-actually produces — `SendMessage`, `OrderCoffee` with an `AppEnum`, an
-`AppShortcutsProvider` and an `IntentDonationManager` donation.
-
-It is not illustrative prose. CI **typechecks it against the real AppIntents framework**
-and asserts the scanner finds **zero** patterns in it, so the advice in `CommonPatterns`
-cannot quietly drift away from code that compiles:
-
-```bash
-xcrun swiftc -typecheck -target arm64-apple-macos14 Examples/MigratedAppIntentsApp/*.swift
-swift run app-intents-migrator scan Examples/MigratedAppIntentsApp   # Total patterns: 0
-```
-
-## Xcode integration
-
-### Inline warnings in the editor
-
-`--xcode` emits findings in the compiler's diagnostic format, so a Run Script build phase
-turns them into warnings on the offending lines:
+`--xcode` prints compiler-format diagnostics, so a Run Script build phase turns findings
+into warnings on the right lines:
 
 ```bash
 app-intents-migrator scan "$SRCROOT" --xcode
 ```
 
-Add that as a Run Script phase (uncheck *Based on dependency analysis* so it runs every
-build), and SiriKit calls are flagged where you are already looking:
-
 ```
 MyApp/IntentHandler.swift:4: warning: SiriKit: INExtension subclass → INExtension class → AppIntent struct [Manual review]
 ```
 
-Pass `--warnings-as-errors` to fail the build instead — for teams enforcing the migration
-rather than advising it. This works with any `.xcodeproj`; no extension to install.
+Uncheck *Based on dependency analysis* so it runs every build. Works with any `.xcodeproj`.
 
-### Swift package plugin
-
-For package-based projects:
+For Swift packages there's also a command plugin:
 
 ```bash
 swift package app-intents-scan
 ```
 
-Also available from Xcode by right-clicking the package in the navigator. The plugin
-declares no write permission, so it can never modify what it inspects — patching stays in
-the CLI where the backup and validation gates apply.
+It declares no write permission, so it can't modify what it inspects.
 
-> **Why not an Xcode Source Editor Extension?** It is sandboxed to the current editor
-> buffer: no access to the project tree and no ability to run `swiftc`. Backups, cross-file
-> analysis and syntax validation — the whole safety model — are unavailable there, so it
-> would offer strictly less than the build phase above while being harder to install.
+A Source Editor Extension would be the obvious alternative, but it only sees the current
+editor buffer and can't run `swiftc`, so backups, cross-file analysis and validation aren't
+possible there.
 
-## Installation
+## Examples
 
-Clone and build:
-
-```bash
-git clone https://github.com/divyaravitech/AppIntentsMigrator.git
-cd AppIntentsMigrator
-swift build -c release
-```
-
-The binary is at `.build/release/app-intents-migrator`.
-
-A Homebrew formula with the v1.0.0 SHA is ready in
-[`Formula/app-intents-migrator.rb`](Formula/app-intents-migrator.rb). It needs a
-`homebrew-tap` repository to be installable; until that exists, build from source above.
-Once published:
+`Examples/LegacySiriKitApp` is an un-migrated SiriKit app that triggers all 22 rules.
+`Examples/MigratedAppIntentsApp` is what the suggestions produce, and it's compiled in CI
+so the recommended output can't drift from what actually builds.
 
 ```bash
-brew install divyaravitech/tap/app-intents-migrator
+swift run app-intents-migrator scan Examples/LegacySiriKitApp
 ```
 
-## Usage
+## Checked against
 
-### Scan your codebase
-```bash
-app-intents-migrator scan ~/MyProject
-```
+| Project | Swift files | Findings |
+| --- | --- | --- |
+| [simplenote-ios](https://github.com/Automattic/simplenote-ios) | 358 | 49 |
+| [Loop](https://github.com/LoopKit/Loop) | 398 | 41 |
+| [zpod](https://github.com/ezigus/zpod) | 464 | 36 |
 
-Outputs a summary plus a detailed `migration_report.json`.
-
-| Option | Effect |
-| --- | --- |
-| `--json <path>` | Where to write the JSON report (default `migration_report.json`) |
-| `--no-json` | Console output only |
-| `--exclude <glob>` | Skip matching paths. Repeatable |
-| `--xcode` | Emit Xcode diagnostics for a Run Script build phase |
-| `--warnings-as-errors` | With `--xcode`, fail the build on findings |
-
-### Get migration suggestions
-```bash
-app-intents-migrator suggest ~/MyProject
-```
-
-| Option | Effect |
-| --- | --- |
-| `-o, --output <path>` | Save the report. A `.json` path writes JSON; any other extension writes the text guide |
-| `--summary` | Print only the counts, without the guide |
-| `--exclude <glob>` | Skip matching paths. Repeatable |
-
-### Apply safe patches
-```bash
-app-intents-migrator patch ~/MyProject --dry-run
-```
-
-| Option | Effect |
-| --- | --- |
-| `--dry-run` | Show the changes without writing them |
-| `--apply` | Write the changes (the default) |
-| `--rollback <archive>` | Restore a backup, undoing a previous run |
-| `--validate-only` | Only check that the project's Swift files parse |
-| `--include-structural` | Also write structural rewrites. These usually need follow-up edits |
-| `--typecheck` | Validate with `swiftc -typecheck` instead of `-parse` |
-| `-o, --output <path>` | Write the patch report as JSON |
-| `--exclude <glob>` | Skip matching paths. Repeatable |
-
-### Excluding paths
-
-Globs are matched against each path relative to the scan root *and* against the file name:
-
-```bash
-app-intents-migrator scan ~/MyProject --exclude 'Tests/*' --exclude '*.generated.swift'
-```
-
-### Undoing a patch
-```bash
-app-intents-migrator patch ~/MyProject --rollback ~/MyProject/AppIntentsMigrator.backup-2026-08-13.tar.gz
-```
-
-## What's Covered
-
-22 SiriKit → App Intents migrations:
-- INExtension classes → AppIntent structs
-- INIntent subclasses → new AppIntent definitions
-- `handler(for:)` → `perform()`
-- `handle(intent:completion:)` → async `perform()`
-- `resolve…(for:with:)` → `@Parameter` declarations
-- INIntentResolutionResult → async parameter resolution
-- INInteraction donation → IntentDonationManager
-- INVoiceShortcutCenter → AppShortcutsProvider
-- `suggestedInvocationPhrase` → `@AppShortcutsBuilder`
-- Info.plist intent lists → Swift declarations
-- Privacy manifest updates
-- And 11 more...
-
-Each with an Apple documentation link checked against Apple's documentation API.
-
-## Roadmap
-
-- [x] Phase 1: Scanner
-- [x] Phase 2: Suggestion Engine
-- [x] Phase 3: Auto-patcher (safe mechanical migrations)
-- [x] Test suite
-- [x] Phase 4: Xcode integration (build-phase diagnostics + package plugin)
+Cross-checked against `grep`, nothing was missed. Running it on Loop is what turned up a bug
+where the patcher wanted to delete `isEligibleForHandoff = false`, which would have
+re-enabled Handoff.
 
 ## Tests
 
@@ -312,24 +173,16 @@ Each with an Apple documentation link checked against Apple's documentation API.
 swift test
 ```
 
-44 tests covering the detector (comments, string literals, interpolation, CRLF and CR line endings,
-wrapped signatures, property lists), the migration library's coverage invariants, the patching safety guards, backup
-round-trips, and exclusion globs.
+44 tests over the detector (comments, string literals, interpolation, CRLF/CR line endings,
+wrapped signatures, property lists), the migration library, the patching guards, backup
+round-trips and exclusion globs.
 
-## Requirements
+## Contributing
 
-- Swift 5.9+
-- macOS 13+
+See [CONTRIBUTING.md](CONTRIBUTING.md). The most useful thing to report is a real SiriKit
+pattern this gets wrong. Detection is regex-based, so unusual code shapes are where it
+fails.
 
 ## License
 
 MIT
-
-## Author
-
-Divya Ravi
-GitHub: [@divyaravitech](https://github.com/divyaravitech)
-
----
-
-**SiriKit still compiles. That's exactly why it's easy to miss.**

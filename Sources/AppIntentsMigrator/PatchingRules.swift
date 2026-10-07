@@ -1,16 +1,7 @@
 import Foundation
 
-/// The rewrite rules the auto-patcher is allowed to consider.
-///
-/// Two tiers, and the distinction is the whole point of this phase:
-///
-/// - `.automatic` rules are line-local and semantics-preserving. A line matches, it is
-///   replaced or deleted, and nothing outside that line is affected. Every automatic rule
-///   corresponds to a `MigrationPattern` marked `.autoPatchable` — enforced by
-///   `inconsistentRules`.
-/// - `.proposalOnly` rules are structural. Text substitution can produce the new signature
-///   but not the new *body*, so the result does not compile without human work. They are
-///   shown in dry runs and only written when the caller explicitly opts in.
+/// Rewrite rules. `.automatic` is line-local and semantics-preserving;
+/// `.proposalOnly` is structural and only written when the caller opts in.
 enum PatchingRules {
 
     /// What a matching rule does to the line.
@@ -146,9 +137,6 @@ enum PatchingRules {
     }
 
     /// Automatic rules whose migration is not marked `.autoPatchable`.
-    ///
-    /// Always empty: the safety tier here and the complexity in `CommonPatterns` must agree,
-    /// or the patcher would write a change the guide calls manual. Exposed so it is testable.
     static var inconsistentRules: [String] {
         all.compactMap { rule in
             guard rule.safety == .automatic else { return nil }
@@ -159,7 +147,7 @@ enum PatchingRules {
 
     // MARK: - Application
 
-    /// Applies `rule` to `line`, returning the new text (`nil` means delete the line),
+    /// Returns the new text (`nil` deletes the line), and whether the rule matched.
     /// or `.none` when the rule does not match.
     static func apply(_ rule: Rule, to line: String) -> (replacement: String?, matched: Bool) {
         let range = NSRange(line.startIndex..<line.endIndex, in: line)
@@ -181,7 +169,7 @@ enum PatchingRules {
         }
     }
 
-    /// True when every bracket opened on the line is also closed on it, so removing the
+    /// True when every bracket opened on the line is also closed on it.
     /// line cannot orphan a block. Brackets inside string literals are ignored.
     static func isSelfContained(_ line: String) -> Bool {
         var depth = 0

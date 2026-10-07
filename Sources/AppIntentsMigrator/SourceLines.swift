@@ -1,15 +1,7 @@
 import Foundation
 
-/// Splits source into lines while remembering how each one ended.
-///
-/// Swift treats `"\r\n"` as a *single* `Character`, so `split(separator: "\n")` never
-/// matches it and a CRLF file collapses into one enormous line. That silently cost three
-/// quarters of the findings in a Windows-authored file, and made every reported line number
-/// wrong, with no error to notice.
-///
-/// Terminators are preserved rather than normalised so the patcher can rewrite one line
-/// without converting the rest of the file's line endings — an edit should not show up as a
-/// whole-file whitespace change in review.
+/// Splits on CRLF, LF and CR, keeping each terminator.
+/// Swift treats "\r\n" as one Character, so splitting on "\n" alone misses it.
 enum SourceLines {
 
     struct Line: Equatable {
@@ -19,7 +11,6 @@ enum SourceLines {
         let terminator: String
     }
 
-    /// Splits on CRLF, LF and CR, keeping each line's own terminator.
     static func split(_ source: String) -> [Line] {
         var lines: [Line] = []
         var current = ""

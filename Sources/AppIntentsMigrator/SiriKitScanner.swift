@@ -26,10 +26,6 @@ struct SiriKitScanner: Sendable {
     var detector = PatternDetector()
 
     /// Scans `path`, which may be a directory tree or a single file.
-    ///
-    /// - Throws: `ScanError` when the root is missing or unreadable, or `FileWalker.WalkError`
-    ///   when the tree cannot be enumerated. Individual files that fail to read are recorded
-    ///   in `ScanResult.skippedFiles` rather than aborting the scan.
     func scan(path: String) throws -> ScanResult {
         let root = FileWalker.normalize(path)
 

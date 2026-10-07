@@ -1,11 +1,6 @@
 import Foundation
 
-/// Finds the files the tool operates on.
-///
-/// The single source of truth for which paths are in scope. The scanner, the validator and
-/// the backup manager all walk the same tree and must agree on what counts — when the list
-/// of ignored directories lived in each of them separately, they could silently drift, and a
-/// backup could omit a file the scanner had just reported.
+/// Single source of truth for which files are in scope.
 struct FileWalker: Sendable {
 
     enum WalkError: LocalizedError, Equatable {
@@ -38,7 +33,6 @@ struct FileWalker: Sendable {
     }
 
     /// Matching files under `root`, symlink-resolved and sorted.
-    ///
     /// Unreadable directories are skipped rather than aborting the walk.
     func files(in root: URL) throws -> [URL] {
         guard
@@ -91,9 +85,6 @@ struct FileWalker: Sendable {
     }
 
     /// Standardises a user-supplied path the way every entry point should.
-    ///
-    /// Symlinks are resolved because `FileManager`'s enumerator resolves them, and the two
-    /// must agree or relative paths cannot be derived by prefix.
     static func normalize(_ path: String) -> URL {
         URL(fileURLWithPath: (path as NSString).expandingTildeInPath)
             .standardizedFileURL

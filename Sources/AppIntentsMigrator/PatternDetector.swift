@@ -4,9 +4,6 @@ import Foundation
 struct PatternDetector: Sendable {
 
     /// A single regex-based detection rule.
-    ///
-    /// `NSRegularExpression` is immutable and documented as thread-safe for concurrent
-    /// matching, but is not annotated `Sendable`, hence the unchecked conformance.
     struct Rule: @unchecked Sendable {
         let type: PatternType
         let id: RuleID
@@ -66,18 +63,11 @@ struct PatternDetector: Sendable {
     ]
 
     /// Scans `source` and returns every pattern found, ordered by line number.
-    ///
-    /// - Parameters:
-    ///   - source: Full contents of a Swift file.
-    ///   - file: Path recorded on each finding.
     func detect(in source: String, file: String) -> [DetectedPattern] {
         var patterns: [DetectedPattern] = []
         var lexer = LexerState()
 
         // A declaration wrapped across lines is one site, not several. Only parentheses and
-        // brackets are counted, never braces: a wrapped signature or call is held open by
-        // parens, whereas a function *body* is braces, and separate statements inside one
-        // body must stay separate findings.
         var openDepth = 0
         var rulesInDeclaration: Set<RuleID> = []
 
@@ -126,11 +116,6 @@ struct PatternDetector: Sendable {
     // MARK: - Property lists
 
     /// Rules for `Info.plist`, where SiriKit is declared rather than called.
-    ///
-    /// These reuse the `RuleID`s of the equivalent Swift patterns, so the same migration
-    /// advice applies and `CommonPatterns` needs no plist-specific entries. They exist
-    /// because the keys below only ever appear inside a string in Swift source, and the
-    /// detector deliberately ignores string contents.
     static let propertyListRules: [Rule] = [
         rule(.inExtension, .inExtensionReference, #"com\.apple\.intents(?:-ui)?-service"#),
         rule(.otherSiriKit, .infoPlistIntents, #"\b(?:IntentsSupported|IntentsRestrictedWhileLocked)\b"#),
@@ -139,9 +124,6 @@ struct PatternDetector: Sendable {
     ]
 
     /// Scans a property list for SiriKit declarations.
-    ///
-    /// XML comments are skipped; otherwise this is a plain line scan, since a plist has no
-    /// string literals to distinguish from code.
     func detectInPropertyList(in source: String, file: String) -> [DetectedPattern] {
         var patterns: [DetectedPattern] = []
         var insideComment = false
@@ -210,17 +192,8 @@ struct PatternDetector: Sendable {
         var multilineStringHashes: Int?
     }
 
-    /// Returns only the executable code on a line, with comments and string literal
-    /// contents removed.
-    ///
-    /// Both are excluded for the same reason: SiriKit symbols appearing there are not code
-    /// to migrate. Commented-out code should not be reported, and neither should the
-    /// contents of a string — a documentation sample, a fixture, or a regex that happens to
-    /// mention `INExtension` is text, not an API call. Patching such a line would edit the
-    /// inside of a literal, which still parses, so validation could not catch the damage.
-    ///
-    /// Handles nested `/* */`, `//`, single-line and multi-line strings, and the raw forms
-    /// (`#"…"#`, `#"""…"""#`) where the delimiter count decides what terminates the literal.
+    /// Strips comments and string literals, leaving only executable code.
+    /// Handles nested block comments, raw and multi-line strings, and interpolation.
     static func codeOnly(from line: String, state: inout LexerState) -> String {
         let characters = Array(line)
         var result = ""
@@ -330,9 +303,6 @@ struct PatternDetector: Sendable {
     }
 
     /// Index just past the `)` closing an interpolation that starts at `openParen`.
-    ///
-    /// Counts nesting and steps over string literals inside the expression, so
-    /// `\(items.map { "\($0)" })` is consumed whole.
     private static func endOfInterpolation(_ characters: [Character], openParen: Int) -> Int {
         var index = openParen
         var depth = 0
@@ -356,7 +326,7 @@ struct PatternDetector: Sendable {
         return characters.count
     }
 
-    /// Builds a rule from a literal pattern. The patterns are compile-time constants,
+    /// Patterns are compile-time constants, so a bad one is a programming error.
     /// so a failure here is a programming error rather than a runtime condition.
     private static func rule(_ type: PatternType, _ id: RuleID, _ pattern: String) -> Rule {
         // swiftlint:disable:next force_try

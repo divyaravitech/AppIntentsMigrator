@@ -1,56 +1,52 @@
 # Contributing
 
-Thanks for looking. The most valuable contribution is a **real SiriKit pattern this gets
-wrong** — detection is regex-based and line-oriented, so unusual code shapes are where it
-fails. A three-line snippet in an issue is enough.
+The most useful thing you can file is a real SiriKit pattern this gets wrong. Detection is
+regex-based and line-oriented, so unusual code shapes are where it fails. A three-line
+snippet is enough.
 
-## Getting set up
+## Setup
 
 ```bash
 swift build && swift test
 ```
 
-There is a sample SiriKit app at `Examples/LegacySiriKitApp` that triggers every rule.
+`Examples/LegacySiriKitApp` triggers every rule if you need something to run against.
 
 ## Where things live
 
 | To change | Edit |
 | --- | --- |
-| What counts as a SiriKit pattern | `PatternDetector.swift` — one regex per `RuleID` |
-| The migration advice shown for a pattern | `CommonPatterns.swift` — the single source of truth |
-| What the patcher is allowed to rewrite | `PatchingRules.swift` |
+| What counts as a SiriKit pattern | `PatternDetector.swift` |
+| The advice shown for a pattern | `CommonPatterns.swift` |
+| What the patcher may rewrite | `PatchingRules.swift` |
 | Which files are in scope | `FileWalker.swift` |
 
 ## Two invariants the tests enforce
 
-1. **Every `RuleID` has a migration.** Add a detection rule without adding a
-   `CommonPatterns` entry and `CommonPatternsTests` fails — otherwise findings would be
-   detected and then silently dropped from `suggest`.
-2. **Automatic patching rules map only to `.autoPatchable` migrations.** The patcher must
-   never write a change the guide describes as needing manual review.
+1. Every `RuleID` has a migration in `CommonPatterns`. Without one, findings would be
+   detected and then dropped from `suggest`.
+2. Automatic patching rules map only to `.autoPatchable` migrations, so the patcher never
+   writes a change the guide calls manual.
 
 ## Adding a patching rule
 
-The bar is high, and deliberately so. An automatic rule must be **line-local and
-semantics-preserving**: the line matches, it is replaced or deleted, and nothing outside
-that line changes meaning.
+An automatic rule has to be line-local and preserve semantics: the line matches, it's
+replaced or deleted, and nothing outside it changes meaning. If you can't verify a rewrite
+by looking at one line, it belongs in `.proposalOnly`.
 
-Things that have gone wrong here before, all of which passed `swiftc -parse`:
+Things that went wrong here before, all of which passed `swiftc -parse`:
 
-- Rewriting SiriKit code that lived inside a **string literal**.
+- Rewriting SiriKit code that was inside a string literal.
 - Swapping `import Intents` while the file still used `IN…` symbols.
 - Deleting `isEligibleForHandoff = false`, which reverted the property to its default and
-  flipped the behaviour — and isn't part of this migration anyway.
-
-If a rewrite cannot be verified by looking at one line, it belongs in `.proposalOnly`.
+  flipped the behaviour. It isn't part of this migration anyway.
 
 ## Validation is weaker than it looks
 
-`swiftc -parse` checks **syntax only**. It does not catch type errors, missing members, or
-unresolved imports. Never treat "validation passed" as "this compiles".
+`swiftc -parse` checks syntax only. It doesn't catch type errors, missing members or
+unresolved imports, so "validation passed" never means "this compiles".
 
 ## Commits
 
-Explain *why* in the body, not just what. If a change fixes something subtle, say what the
-failure looked like — several comments in this codebase exist because the reason wasn't
-obvious later.
+Say why in the body, not just what. If a fix is subtle, describe what the failure looked
+like.

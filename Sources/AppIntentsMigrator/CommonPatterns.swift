@@ -1,14 +1,6 @@
 import Foundation
 
 /// The single source of truth for SiriKit → App Intents migration advice.
-///
-/// Every `RuleID` the detector can emit maps to exactly one `MigrationPattern` here,
-/// so a new detection rule cannot ship without migration guidance (see `unmappedRules`).
-///
-/// **Provenance:** guidance is derived from Apple's published App Intents framework
-/// documentation. Every `appleDocLink` below was checked against Apple's documentation
-/// API and returns a live page. Sessions from WWDC26 are *not* reflected here — if that
-/// material changes any recommendation, this file is the only place to update.
 enum CommonPatterns {
 
     // MARK: - Lookup
@@ -282,9 +274,6 @@ enum CommonPatterns {
             """#,
             afterCode: #"""
             // Nothing to wire up: an AppIntent in your app target already runs in your
-            // app's process, with access to its state.
-            //
-            // Only if you need out-of-process execution:
             struct MyIntentsExtension: AppIntentsExtension {}
             """#,
             explanation: """
@@ -710,12 +699,6 @@ enum CommonPatterns {
             """#,
             afterCode: #"""
             // Keep the ATT prompt, and additionally declare the behaviour in a privacy
-            // manifest — PrivacyInfo.xcprivacy — in the app and each bundled SDK:
-            //
-            //   NSPrivacyTracking            <true/>
-            //   NSPrivacyTrackingDomains     [ "analytics.example.com" ]
-            //   NSPrivacyCollectedDataTypes  [ ... what you collect and why ... ]
-            //   NSPrivacyAccessedAPITypes    [ ... required-reason APIs ... ]
             """#,
             explanation: """
             The tracking prompt itself has not changed, but the declaration has: data \

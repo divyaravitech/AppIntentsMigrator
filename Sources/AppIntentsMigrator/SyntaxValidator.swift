@@ -1,10 +1,6 @@
 import Foundation
 
 /// Checks that Swift source is still well-formed.
-///
-/// A protocol so the patcher's rollback path can be exercised with a validator that fails
-/// on demand. That branch is the tool's last line of defence and is otherwise unreachable
-/// in a test: the real validator agrees with itself, so it never rejects what it just passed.
 protocol SourceValidating: Sendable {
     /// Checks one file in isolation.
     func validateFile(_ path: String) async throws -> ValidationResult
@@ -13,19 +9,8 @@ protocol SourceValidating: Sendable {
     func validateFiles(_ paths: [String]) async throws -> [ValidationError]
 }
 
-/// Checks patched files with the Swift compiler front end.
-///
-/// **What this can and cannot catch.** The default mode runs `swiftc -parse`, which is a
-/// syntax-only check: it verifies the file still parses, and nothing more. It does *not*
-/// catch type mismatches, missing members, or unresolved imports — a file where a class was
-/// turned into a struct with `override` members still parses cleanly.
-///
-/// `-typecheck` catches those, but a single file compiled outside its module has no access
-/// to the project's other types, and building for the host platform makes `import UIKit`
-/// fail. On an iOS project it reports errors that are not real. It is therefore opt-in.
-///
-/// The practical consequence: passing validation means "still parses", which is enough to
-/// catch a botched text substitution, and is not a promise that the project builds.
+/// `-parse` checks syntax only: it does not catch type errors or unresolved imports.
+/// `-typecheck` does, but reports false errors for files needing the rest of the module.
 actor SyntaxValidator: SourceValidating {
 
     enum Mode: String, Sendable {
@@ -48,7 +33,6 @@ actor SyntaxValidator: SourceValidating {
     }
 
     /// Validates every Swift file under `path`, returning only the failures.
-    ///
     /// Files are checked concurrently; each `swiftc` invocation is independent.
     func validateProject(_ path: String) async throws -> [ValidationError] {
         let files = try Self.swiftFiles(in: path)
@@ -56,10 +40,6 @@ actor SyntaxValidator: SourceValidating {
     }
 
     /// Validates files as a single compiler invocation.
-    ///
-    /// This is deliberately not a loop over `validateFile`. Under `-typecheck` the files are
-    /// compiled as one unit, so a patch that breaks a reference *between* files is caught
-    /// here — the case a per-file check cannot see.
     func validateFiles(_ paths: [String]) async throws -> [ValidationError] {
         guard !paths.isEmpty else { return [] }
         let outcome = try Self.runCompiler(on: paths, mode: mode)
@@ -114,10 +94,6 @@ actor SyntaxValidator: SourceValidating {
     }
 
     /// Extracts `path:line:column: error: message` diagnostics from compiler output.
-    ///
-    /// The path is taken from the diagnostic itself, so a multi-file invocation attributes
-    /// each error to the file that caused it. `defaultFile` covers diagnostics with no
-    /// location (a bare driver error, say).
     static func parseDiagnostics(_ output: String, defaultFile: String) -> [ValidationError] {
         var errors: [ValidationError] = []
 

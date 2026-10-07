@@ -1,10 +1,6 @@
 import Foundation
 
 /// Runs an external command and captures its output.
-///
-/// Owned separately from its callers so that a launch failure is reported as what it is.
-/// Callers map `Failure` onto their own domain error — a missing toolchain is a validation
-/// problem, not a backup problem.
 enum Subprocess {
 
     struct Outcome: Sendable {
@@ -27,10 +23,6 @@ enum Subprocess {
     }
 
     /// Runs `launchPath` with `arguments`, returning its exit status and combined output.
-    ///
-    /// - Throws: `Failure.launchFailed` when the process cannot be started at all. A process
-    ///   that runs and exits non-zero is returned as an `Outcome`, not thrown — the caller
-    ///   decides whether that is an error.
     static func run(_ launchPath: String, _ arguments: [String]) throws -> Outcome {
         let process = Process()
         process.executableURL = URL(fileURLWithPath: launchPath)

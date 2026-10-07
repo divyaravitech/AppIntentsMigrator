@@ -1,10 +1,6 @@
 import Foundation
 
 /// Creates and restores `.tar.gz` snapshots of a project's Swift sources.
-///
-/// Only `.swift` files are archived — those are the only files the patcher can modify,
-/// and archiving build output would make backups enormous. Restoring therefore overwrites
-/// Swift files that were captured; it does not delete files created after the backup.
 actor BackupManager {
 
     static let archivePrefix = "AppIntentsMigrator.backup-"
@@ -12,9 +8,6 @@ actor BackupManager {
     private let fileManager = FileManager.default
 
     /// Archives every Swift file under `projectPath` into the project root.
-    ///
-    /// - Throws: `PatchError.backupFailed` if the archive cannot be written. Callers must
-    ///   treat that as fatal and leave the project untouched.
     func createBackup(projectPath: String) throws -> BackupInfo {
         let root = FileWalker.normalize(projectPath)
 
@@ -115,9 +108,6 @@ actor BackupManager {
     }
 
     /// Swift files under `root`, as paths relative to it.
-    ///
-    /// Scope comes from `FileWalker`, so a backup covers exactly the files the patcher
-    /// could modify.
     private func swiftFiles(in root: URL) throws -> [String] {
         try FileWalker(extensions: ["swift"])
             .files(in: root)

@@ -1,15 +1,10 @@
 import Foundation
 
 /// Turns scanner findings into actionable migration suggestions.
-///
 /// All advice comes from `CommonPatterns`; this type only binds a recipe to a finding.
 struct SuggestionGenerator: Sendable {
 
     /// One suggestion per finding, in the order the patterns were detected.
-    ///
-    /// Findings with no mapped migration are dropped rather than guessed at. Because
-    /// `CommonPatterns` covers every `RuleID`, that case does not arise today — see
-    /// `CommonPatterns.unmappedRules`.
     func generateSuggestions(patterns: [DetectedPattern]) -> [MigrationSuggestion] {
         patterns.compactMap { pattern in
             guard let migration = CommonPatterns.migration(for: pattern) else { return nil }
