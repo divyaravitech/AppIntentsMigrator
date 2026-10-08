@@ -63,6 +63,7 @@ parsed with swift-syntax first, so comments and string literals are never matche
 | `--json <path>` | JSON report location (default `migration_report.json`) |
 | `--no-json` | Console only |
 | `--xcode` | Emit Xcode diagnostics (see below) |
+| `--github` | Emit GitHub Actions annotations |
 | `--warnings-as-errors` | With `--xcode`, fail the build |
 | `--exclude <glob>` | Skip paths. Repeatable |
 
@@ -132,6 +133,27 @@ MyApp/IntentHandler.swift:4: warning: SiriKit: INExtension subclass → INExtens
 ```
 
 Uncheck *Based on dependency analysis* so it runs every build. Works with any `.xcodeproj`.
+
+### GitHub Actions
+
+Annotates SiriKit usage on the pull request diff:
+
+```yaml
+jobs:
+  sirikit:
+    runs-on: macos-latest   # needs macOS: the tool uses swiftc
+    steps:
+      - uses: actions/checkout@v4
+      - uses: divyaravitech/AppIntentsMigrator@v1
+        with:
+          path: .
+          exclude: "Tests/*"
+          fail-on-findings: "false"
+```
+
+Outputs `total` and `files-affected`, and writes a summary to the job page.
+
+### Swift package plugin
 
 For Swift packages there's also a command plugin:
 

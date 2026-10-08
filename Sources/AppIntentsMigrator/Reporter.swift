@@ -85,6 +85,28 @@ enum Reporter {
         .joined(separator: "\n")
     }
 
+    /// GitHub Actions workflow commands, which render as annotations on the PR diff.
+    /// Paths must be relative to the repository root for GitHub to place them.
+    static func formatGitHubAnnotations(result: ScanResult, severity: Severity = .warning) -> String {
+        result.patterns.map { pattern in
+            let migration = CommonPatterns.byRule[pattern.rule]
+            let advice = migration.map { " \($0.title) [\($0.complexity.displayLabel)]" } ?? ""
+            let subject = pattern.patternType == .privacy ? "Privacy" : "SiriKit"
+            let title = "\(subject): \(pattern.rule.rawValue)"
+            let message = "\(pattern.code)\n\n\(advice.trimmingCharacters(in: .whitespaces))"
+            return "::\(severity.rawValue) file=\(pattern.file),line=\(pattern.line),title=\(title)::\(escaped(message))"
+        }
+        .joined(separator: "\n")
+    }
+
+    /// Workflow commands are newline-delimited, so data newlines must be encoded.
+    private static func escaped(_ message: String) -> String {
+        message
+            .replacingOccurrences(of: "%", with: "%25")
+            .replacingOccurrences(of: "\r", with: "%0D")
+            .replacingOccurrences(of: "\n", with: "%0A")
+    }
+
     enum Severity: String, Sendable {
         case warning
         /// Fails the build. For teams that want the migration enforced rather than advised.

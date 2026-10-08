@@ -36,6 +36,12 @@ struct Scan: ParsableCommand {
     var xcodeDiagnostics: Bool = false
 
     @Flag(
+        name: .customLong("github"),
+        help: "Emit GitHub Actions annotations instead of a report."
+    )
+    var githubAnnotations: Bool = false
+
+    @Flag(
         name: .customLong("warnings-as-errors"),
         help: "With --xcode, emit errors instead of warnings so the build fails."
     )
@@ -52,6 +58,16 @@ struct Scan: ParsableCommand {
 
     func run() throws {
         let result = try SiriKitScanner(excludedGlobs: excludedGlobs).scan(path: path)
+
+        if githubAnnotations {
+            let annotations = Reporter.formatGitHubAnnotations(
+                result: result,
+                severity: warningsAsErrors ? .error : .warning
+            )
+            if !annotations.isEmpty { print(annotations) }
+            if warningsAsErrors, result.totalCount > 0 { throw ExitCode(1) }
+            return
+        }
 
         if xcodeDiagnostics {
             let diagnostics = Reporter.formatXcodeDiagnostics(

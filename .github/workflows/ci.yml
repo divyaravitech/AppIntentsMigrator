@@ -71,3 +71,29 @@ jobs:
       - uses: actions/checkout@v4
       - name: Build with complete concurrency checking
         run: swift build -Xswiftc -strict-concurrency=complete
+
+  action:
+    name: Action works
+    runs-on: macos-15
+    steps:
+      - uses: actions/checkout@v4
+
+      # Runs the action in this repo against the sample app. Proves the published
+      # binary downloads and the annotations are well formed.
+      - name: Run the action
+        id: scan
+        uses: ./
+        with:
+          path: Examples/LegacySiriKitApp
+
+      - name: Check it reported findings
+        run: |
+          echo "total=${{ steps.scan.outputs.total }} files=${{ steps.scan.outputs.files-affected }}"
+          test "${{ steps.scan.outputs.total }}" -gt 0
+          test "${{ steps.scan.outputs.files-affected }}" -gt 0
+
+      - name: Clean project produces no findings and does not fail
+        uses: ./
+        with:
+          path: Sources
+          fail-on-findings: "true"

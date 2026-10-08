@@ -1,0 +1,100 @@
+name: App Intents Migrator
+description: Annotate SiriKit usage in a Swift project with its App Intents replacement.
+author: Divya Ravi
+
+branding:
+  icon: search
+  color: orange
+
+inputs:
+  path:
+    description: Directory to scan.
+    required: false
+    default: .
+  exclude:
+    description: Space-separated globs to skip, e.g. "Tests/* *.generated.swift".
+    required: false
+    default: ""
+  fail-on-findings:
+    description: Fail the job when SiriKit is found. Annotations become errors.
+    required: false
+    default: "false"
+  version:
+    description: Release tag of the tool to use.
+    required: false
+    default: v1.0.0
+
+outputs:
+  total:
+    description: Number of patterns found.
+    value: ${{ steps.scan.outputs.total }}
+  files-affected:
+    description: Number of files containing SiriKit.
+    value: ${{ steps.scan.outputs.files-affected }}
+
+runs:
+  using: composite
+  steps:
+    - name: Check runner
+      shell: bash
+      run: |
+        if [ "$(uname)" != "Darwin" ]; then
+          echo "::error::app-intents-migrator needs a macOS runner (it uses swiftc). Set 'runs-on: macos-latest'."
+          exit 1
+        fi
+
+    - name: Install app-intents-migrator
+      shell: bash
+      env:
+        VERSION: ${{ inputs.version }}
+      run: |
+        set -euo pipefail
+        DEST="$RUNNER_TEMP/app-intents-migrator"
+        mkdir -p "$DEST"
+        URL="https://github.com/divyaravitech/AppIntentsMigrator/releases/download/${VERSION}/app-intents-migrator-macos-universal.tar.gz"
+        echo "Downloading $URL"
+        curl --fail --silent --show-error --location "$URL" | tar -xz -C "$DEST"
+        chmod +x "$DEST/app-intents-migrator"
+        echo "$DEST" >> "$GITHUB_PATH"
+
+    - name: Scan
+      id: scan
+      shell: bash
+      env:
+        SCAN_PATH: ${{ inputs.path }}
+        EXCLUDES: ${{ inputs.exclude }}
+        FAIL: ${{ inputs.fail-on-findings }}
+      run: |
+        set -uo pipefail
+        args=(scan "$SCAN_PATH" --github)
+        for glob in $EXCLUDES; do args+=(--exclude "$glob"); done
+        [ "$FAIL" = "true" ] && args+=(--warnings-as-errors)
+
+        # Annotations go to stdout and are consumed by the runner as they print.
+        app-intents-migrator "${args[@]}"
+        status=$?
+
+        # A second, quiet pass for the summary and the step outputs.
+        app-intents-migrator scan "$SCAN_PATH" --json "$RUNNER_TEMP/scan.json" > /dev/null 2>&1 || true
+        total=$(/usr/bin/python3 -c "import json;print(json.load(open('$RUNNER_TEMP/scan.json'))['totalCount'])" 2>/dev/null || echo 0)
+        files=$(/usr/bin/python3 -c "import json;print(json.load(open('$RUNNER_TEMP/scan.json'))['filesAffected'])" 2>/dev/null || echo 0)
+        echo "total=$total" >> "$GITHUB_OUTPUT"
+        echo "files-affected=$files" >> "$GITHUB_OUTPUT"
+
+        {
+          echo "## SiriKit findings"
+          echo
+          if [ "$total" = "0" ]; then
+            echo "No SiriKit patterns found."
+          else
+            echo "**$total** found across **$files** file(s). Each is annotated on the diff."
+            echo
+            echo '```'
+            app-intents-migrator scan "$SCAN_PATH" --no-json 2>/dev/null | sed -n '1,10p'
+            echo '```'
+            echo
+            echo "Run \`app-intents-migrator suggest <path>\` for before/after code."
+          fi
+        } >> "$GITHUB_STEP_SUMMARY"
+
+        exit $status
