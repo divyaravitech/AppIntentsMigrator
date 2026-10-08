@@ -182,12 +182,17 @@ swift run app-intents-migrator scan Examples/LegacySiriKitApp
 | Project | Swift files | Findings |
 | --- | --- | --- |
 | [simplenote-ios](https://github.com/Automattic/simplenote-ios) | 358 | 49 |
-| [Loop](https://github.com/LoopKit/Loop) | 398 | 41 |
-| [zpod](https://github.com/ezigus/zpod) | 464 | 36 |
+| [Loop](https://github.com/LoopKit/Loop) | 398 | 37 |
+| [zpod](https://github.com/ezigus/zpod) | 464 | 27 |
+| [passepartout](https://github.com/partout-io/passepartout) | 577 | 0 |
+| [SakuraCord](https://github.com/SakuraCordApp/SakuraCord) | 990 | 0 |
 
-Cross-checked against `grep`, nothing was missed. Running it on Loop is what turned up a bug
-where the patcher wanted to delete `isEligibleForHandoff = false`, which would have
-re-enabled Handoff.
+The last two use no SiriKit at all, which is the point: rules that match ordinary Swift
+(`didFinishLaunching`, `func resolveSomething(`) only fire when the file actually references
+SiriKit. Without that gate those two projects reported 4 and 17 findings that didn't exist.
+
+Running it on Loop turned up a bug where the patcher wanted to delete
+`isEligibleForHandoff = false`, which would have re-enabled Handoff.
 
 ## Tests
 
@@ -195,7 +200,7 @@ re-enabled Handoff.
 swift test
 ```
 
-46 tests over the detector (comments, string and regex literals, interpolation, CRLF/CR
+49 tests over the detector (comments, string and regex literals, interpolation, CRLF/CR
 line endings, wrapped signatures, property lists), the migration library, the patching
 guards, backup round-trips and exclusion globs.
 
