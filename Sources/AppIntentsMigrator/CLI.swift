@@ -6,7 +6,7 @@ struct AppIntentsMigrator: AsyncParsableCommand {
     static let configuration = CommandConfiguration(
         commandName: "app-intents-migrator",
         abstract: "Migration tooling for moving legacy SiriKit code to App Intents.",
-        version: "1.0.0",
+        version: "1.0.1",
         subcommands: [Scan.self, Suggest.self, Patch.self]
     )
 }
