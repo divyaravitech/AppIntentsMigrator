@@ -1,20 +1,16 @@
 class AppIntentsMigrator < Formula
   desc "Scan and migrate SiriKit code to App Intents"
   homepage "https://github.com/divyaravitech/AppIntentsMigrator"
-  url "https://github.com/divyaravitech/AppIntentsMigrator/archive/refs/tags/v1.0.1.tar.gz"
-  # Recompute with Scripts/update-formula-sha.sh once the repository is public —
-  # the release tarball 404s while it is private, and a naive curl|shasum will
-  # silently hash the error page.
-  sha256 "f2c285d71b3be49fc337491628e3204e5fa7023992ca0574c5be75355e608500"
+  url "https://github.com/divyaravitech/AppIntentsMigrator/releases/download/v1.0.1/app-intents-migrator-macos-universal.tar.gz"
+  sha256 "e050b4f25e49d81f002cc792d584f4e6a564c153fbd25cf57f9fbf52d5209d06"
+  version "1.0.1"
   license "MIT"
-  head "https://github.com/divyaravitech/AppIntentsMigrator.git", branch: "main"
 
-  depends_on xcode: ["15.0", :build]
-  depends_on :macos
-
+  # Installs the prebuilt universal binary. Building from source would pull in
+  # swift-syntax and require a full Xcode plus Command Line Tools, which is a lot
+  # to ask for a command-line scanner.
   def install
-    system "swift", "build", "--disable-sandbox", "-c", "release"
-    bin.install ".build/release/app-intents-migrator"
+    bin.install "app-intents-migrator"
   end
 
   test do
@@ -24,5 +20,6 @@ class AppIntentsMigrator < Formula
     SWIFT
     output = shell_output("#{bin}/app-intents-migrator scan #{testpath} --no-json")
     assert_match "INExtension subclasses: 1", output
+    assert_match version.to_s, shell_output("#{bin}/app-intents-migrator --version")
   end
 end
