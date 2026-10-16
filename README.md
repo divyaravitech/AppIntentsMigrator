@@ -194,6 +194,25 @@ SiriKit. Without that gate those two projects reported 4 and 17 findings that di
 Running it on Loop turned up a bug where the patcher wanted to delete
 `isEligibleForHandoff = false`, which would have re-enabled Handoff.
 
+## How the code is organised
+
+```
+Sources/AppIntentsMigrator/
+  CLI.swift          the three commands
+  Scanning/          find SiriKit: walk files, strip comments and strings, match rules
+  Migration/         the 22 before/after migrations and how findings map to them
+  Patching/          rewrite files, with backup, validation and rollback
+  Reporting/         console, JSON, Xcode and GitHub output
+  Support/           running subprocesses
+```
+
+Each folder owns its own model types. Tests mirror the same layout.
+
+A scan runs in one direction: `FileWalker` picks the files, `SwiftCode` removes
+comments and string literals with swift-syntax, `PatternDetector` matches rules against
+what is left, and `CommonPatterns` turns each match into advice. `AutoPatcher` only ever
+acts on what the scanner already found.
+
 ## Tests
 
 ```bash
