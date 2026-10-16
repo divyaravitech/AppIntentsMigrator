@@ -167,7 +167,6 @@ struct PatchResult: Codable, Equatable, Sendable {
     /// Human-readable reasons for findings that were not patched.
     let skipped: [String]
     /// False means the changes were rolled back, or nothing was written.
-    /// changes were rolled back (or, in a dry run, that nothing was written).
     let validated: Bool
     /// Every change made or proposed, for reporting.
     let edits: [PatchEdit]

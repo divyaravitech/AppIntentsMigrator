@@ -327,8 +327,8 @@ enum CommonPatterns {
             Siri. App Intents can execute without launching your UI, so anything you did \
             in didFinishLaunching to support Siri must move: shortcut registration becomes \
             a static AppShortcutsProvider, and per-invocation work moves into perform(). \
-            Note that perform() may run without your app delegate having run at all — do \
-            not rely on launch-time side effects.
+            perform() may run without your app delegate having run at all, so do not rely \
+            on launch-time side effects.
             """,
             complexity: .manualReview,
             appleDocLink: "https://developer.apple.com/documentation/appintents/appshortcutsprovider"

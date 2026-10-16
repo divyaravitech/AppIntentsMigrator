@@ -148,7 +148,6 @@ enum PatchingRules {
     // MARK: - Application
 
     /// Returns the new text (`nil` deletes the line), and whether the rule matched.
-    /// or `.none` when the rule does not match.
     static func apply(_ rule: Rule, to line: String) -> (replacement: String?, matched: Bool) {
         let range = NSRange(line.startIndex..<line.endIndex, in: line)
         guard rule.regex.firstMatch(in: line, options: [], range: range) != nil else {
@@ -169,8 +168,8 @@ enum PatchingRules {
         }
     }
 
-    /// True when every bracket opened on the line is also closed on it.
-    /// line cannot orphan a block. Brackets inside string literals are ignored.
+    /// True when every bracket opened on the line is also closed on it, so deleting it
+    /// cannot orphan a block. Brackets inside string literals are ignored.
     static func isSelfContained(_ line: String) -> Bool {
         var depth = 0
         var inString = false

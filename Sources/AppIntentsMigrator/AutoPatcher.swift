@@ -194,8 +194,7 @@ actor AutoPatcher {
         }
     }
 
-    /// True when the patched text still references SiriKit outside comments and strings.
-    /// meaning it continues to depend on the Intents module.
+    /// True when the patched text still references SiriKit, so it still needs Intents.
     private func residualSiriKitUsage(in patched: String, file: String) -> Bool {
         PatternDetector()
             .detect(in: patched, file: file)

@@ -3,7 +3,6 @@ import Foundation
 /// How much work a migration needs.
 enum Complexity: String, Codable, CaseIterable, Sendable {
     /// A line-local edit that preserves semantics.
-    /// or deleting a call that has no replacement.
     case autoPatchable = "AutoPatchable"
     /// A structural change that depends on the surrounding code: new types, new
     /// parameter modelling, or behaviour that must be re-expressed.
